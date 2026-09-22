@@ -163,50 +163,7 @@ export default function Navbar({
               )}
             </form>
 
-            {/* Currency Selector Dropdown */}
-            <div className="relative" ref={currencyMenuRef}>
-              <button
-                type="button"
-                onClick={() => setCurrencyOpen(!currencyOpen)}
-                className="flex items-center gap-1.5 rounded-full border border-[#EADBCE] bg-[#FAF7F2] hover:bg-white text-[#221811] hover:border-[#C59B4B] text-xs px-2.5 sm:px-3 py-2 transition-all font-semibold cursor-pointer shadow-2xs"
-                title="تغيير العملة"
-                aria-label="تغيير العملة"
-                aria-expanded={currencyOpen}
-              >
-                <Coins className="w-3.5 h-3.5 text-[#8D6527]" />
-                <span className="text-xs">{currentConfig.symbol} {currentConfig.shortLabel}</span>
-                <ChevronDown className={`w-3 h-3 text-[#968B7E] transition-transform duration-200 ${currencyOpen ? 'rotate-180' : ''}`} />
-              </button>
 
-              {currencyOpen && (
-                <div className="absolute left-0 mt-2 w-48 bg-white rounded-2xl shadow-xl border border-[#EADBCE] p-1.5 z-50 animate-scale-in">
-                  <div className="text-[10px] text-[#968B7E] font-medium px-2.5 py-1 border-b border-[#FAF7F2] mb-1 text-right">
-                    اختيار عملة العرض
-                  </div>
-                  {availableCurrencies.map((c) => (
-                    <button
-                      key={c.code}
-                      type="button"
-                      onClick={() => {
-                        setCurrency(c.code)
-                        setCurrencyOpen(false)
-                      }}
-                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-colors text-right cursor-pointer ${
-                        currency === c.code
-                          ? 'bg-[#FAF7F2] text-[#8D6527] font-bold'
-                          : 'text-[#221811] hover:bg-[#FAF7F2]/60 font-medium'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="w-5 text-center font-bold text-sm text-[#8D6527]">{c.symbol}</span>
-                        <span>{c.label}</span>
-                      </div>
-                      {currency === c.code && <Check className="w-3.5 h-3.5 text-[#8D6527]" />}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
 
             {/* Admin Portal Button */}
             <button
@@ -271,11 +228,10 @@ export default function Navbar({
                       setCurrency(c.code)
                       setMenuOpen(false)
                     }}
-                    className={`py-2 px-2.5 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                      currency === c.code
+                    className={`py-2 px-2.5 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 cursor-pointer ${currency === c.code
                         ? 'bg-[#8D6527] text-white border-[#8D6527] shadow-xs'
                         : 'bg-[#FAF7F2] text-[#221811] border-[#EADBCE] hover:border-[#C59B4B]'
-                    }`}
+                      }`}
                   >
                     <span>{c.symbol}</span>
                     <span>{c.shortLabel}</span>
@@ -463,8 +419,8 @@ export default function Navbar({
                 <button
                   disabled={!ordersEnabled}
                   className={`w-full rounded-full py-3.5 font-bold text-sm shadow-md transition-all flex items-center justify-center gap-3 group ${ordersEnabled
-                      ? 'bg-[#8D6527] hover:bg-[#704F1E] text-white hover:shadow-lg cursor-pointer'
-                      : 'bg-stone-300 text-stone-600 cursor-not-allowed shadow-none'
+                    ? 'bg-[#8D6527] hover:bg-[#704F1E] text-white hover:shadow-lg cursor-pointer'
+                    : 'bg-stone-300 text-stone-600 cursor-not-allowed shadow-none'
                     }`}
                   onClick={() => {
                     if (!ordersEnabled) return

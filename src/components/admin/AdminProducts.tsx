@@ -121,6 +121,10 @@ export default function AdminProducts({
       notify('يرجى ملء جميع الحقول الأساسية (الاسم، السعر، والقسم)', 'error')
       return
     }
+    if (pendingImages.length > 0 && !user?.idToken) {
+      notify('يتطلب رفع الصور تسجيل الدخول كمسؤول — يرجى إعادة تسجيل الدخول.', 'error')
+      return
+    }
     const cat = categories.find(c => c.id === draft.categoryId)
     try {
       setUploading(true)
@@ -168,9 +172,10 @@ export default function AdminProducts({
       setEditing(null)
       setSavedImageUrls([])
       setPendingImages([])
-    } catch (err) {
-      console.error(err)
-      notify('حدث خطأ أثناء حفظ المنتج أو رفع الصور', 'error')
+    } catch (err: unknown) {
+      console.error('Product save/upload error:', err)
+      const errMsg = err instanceof Error ? err.message : 'حدث خطأ غير متوقع'
+      notify(`خطأ: ${errMsg}`, 'error')
     } finally {
       setUploading(false)
     }
