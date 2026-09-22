@@ -1,0 +1,187 @@
+@import "tailwindcss";
+
+/* ─── Luxury Design Tokens ─────────────────────────────────────────────────── */
+@theme {
+  --font-sans: 'Alexandria', system-ui, -apple-system, sans-serif;
+  --font-serif: 'Amiri', serif;
+
+  /* Brand Luxury Palette */
+  --color-canvas: #FAF7F2;
+  --color-canvas-subtle: #F4EFE6;
+  --color-canvas-dark: #1E1712;
+  --color-surface: #FFFFFF;
+  --color-line: #EADBCE;
+  --color-line-subtle: #F0E8DC;
+
+  --color-gold: #C59B4B;
+  --color-gold-hover: #B38737;
+  --color-gold-light: #F7F1E5;
+  --color-gold-glow: #DFB76C;
+  --color-bronze: #8D6527;
+
+  --color-ink: #221811;
+  --color-ink-muted: #685D52;
+  --color-ink-subtle: #968B7E;
+
+  /* Container */
+  --spacing-container: min(1200px, calc(100% - 32px));
+}
+
+/* ─── Base Styles ──────────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  direction: rtl;
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  color: var(--color-ink);
+  background-color: var(--color-canvas);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.container {
+  width: var(--spacing-container);
+  margin-inline: auto;
+}
+
+/* Keep anchored sections clear of the sticky navigation bar. */
+#story,
+#categories,
+#products {
+  scroll-margin-top: 6rem;
+}
+
+.font-serif {
+  font-family: var(--font-serif);
+}
+
+.font-sans {
+  font-family: var(--font-sans);
+}
+
+/* ─── Typography & Eyebrow ─────────────────────────────────────────────────── */
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--color-gold);
+  letter-spacing: 0.08em;
+  font-size: 0.725rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
+}
+
+/* ─── Scrollbar ────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-canvas-subtle);
+}
+::-webkit-scrollbar-thumb {
+  background: #D4C3B2;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-gold);
+}
+
+/* ─── Micro-animations ─────────────────────────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+
+@keyframes slideInLeft {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.cart-drawer-enter {
+  animation: slideInLeft 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ─── Status Badges ────────────────────────────────────────────────────────── */
+.status-new      { background: #FEF3C7; color: #92400E; border: 1px solid #FDE68A; }
+.status-process  { background: #E0E7FF; color: #3730A3; border: 1px solid #C7D2FE; }
+.status-contact  { background: #F3E8FF; color: #6B21A8; border: 1px solid #E9D5FF; }
+.status-done     { background: #DCFCE7; color: #166534; border: 1px solid #BBF7D0; }
+.status-cancel   { background: #FEE2E2; color: #991B1B; border: 1px solid #FECACA; }
+
+/* ─── Glass & Surface Utilities ────────────────────────────────────────────── */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(234, 222, 206, 0.8);
+}
+
+.luxury-card {
+  background: #FFFFFF;
+  border: 1px solid #EADBCE;
+  border-radius: 1.25rem;
+  box-shadow: 0 4px 20px rgba(34, 24, 17, 0.03);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.luxury-card:hover {
+  border-color: #DFB76C;
+  box-shadow: 0 12px 32px rgba(141, 101, 39, 0.09);
+  transform: translateY(-2px);
+}
+
+/* ─── Mobile Utilities ──────────────────────────────────────────────────────── */
+/* Hide scrollbar but keep scroll functionality */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Prevent body scroll when modal is open */
+.modal-open { overflow: hidden; }
+
+/* Improve tap targets on mobile */
+@media (max-width: 640px) {
+  button, a, select {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* Safe area padding for devices with notches */
+@supports (padding: max(0px)) {
+  .safe-bottom {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+}
+
+/* xs breakpoint helpers (< 480px) */
+@media (min-width: 480px) {
+  .xs\:inline { display: inline; }
+  .xs\:hidden { display: none; }
+}
