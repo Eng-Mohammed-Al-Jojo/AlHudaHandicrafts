@@ -71,6 +71,12 @@ export type OrderRouting = 'dashboard' | 'whatsapp'
 
 export type CurrencyCode = 'ILS' | 'USD' | 'EUR'
 
+export type SocialLinks = {
+  instagram: string
+  facebook: string
+  tiktok: string
+}
+
 export type SiteSettings = {
   storeName: string
   whatsappNumber: string
@@ -82,6 +88,7 @@ export type SiteSettings = {
   ordersEnabled: boolean
   usdRate: number
   eurRate: number
+  socialLinks: SocialLinks
 }
 
 export const DEFAULT_SITE_SETTINGS: SiteSettings = {
@@ -95,6 +102,11 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
   ordersEnabled: true,
   usdRate: 3.65,
   eurRate: 3.95,
+  socialLinks: {
+    instagram: '',
+    facebook: '',
+    tiktok: '',
+  },
 }
 
 export type NewsletterSubscriber = {
@@ -104,4 +116,3 @@ export type NewsletterSubscriber = {
   source?: string
   status?: 'active' | 'unsubscribed'
 }
-

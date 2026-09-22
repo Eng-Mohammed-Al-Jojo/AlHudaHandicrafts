@@ -9,7 +9,6 @@ import {
   Minus,
   Trash2,
   ArrowLeft,
-  ShieldCheck,
   Sparkles,
   Truck,
   AlertCircle,
@@ -17,18 +16,16 @@ import {
   ChevronDown,
   Check
 } from 'lucide-react'
-import type { CartItem, FirebaseUser, SiteSettings } from '../../types'
+import type { CartItem, SiteSettings } from '../../types'
 import { useCurrency } from '../../context/CurrencyContext'
 
 interface Props {
   cartCount: number
   cartTotal: number
   cartItems: CartItem[]
-  user: FirebaseUser | null
   onRemoveItem: (id: string) => void
   onUpdateQty?: (id: string, qty: number) => void
   onCheckout: () => void
-  onAdminClick: () => void
   settings?: SiteSettings
 }
 
@@ -36,11 +33,9 @@ export default function Navbar({
   cartCount,
   cartTotal,
   cartItems,
-  user,
   onRemoveItem,
   onUpdateQty,
   onCheckout,
-  onAdminClick,
   settings,
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -144,7 +139,7 @@ export default function Navbar({
             </HeaderNavLink>
           </nav>
 
-          {/* Left Section: Search, Currency, Admin Shortcut, Cart */}
+          {/* Left Section: Search, Currency, Cart */}
           <div className="flex items-center gap-2 sm:gap-3">
 
             {/* Search Input Bar (Desktop) */}
@@ -162,19 +157,6 @@ export default function Navbar({
                 </button>
               )}
             </form>
-
-
-
-            {/* Admin Portal Button */}
-            <button
-              onClick={onAdminClick}
-              className="flex items-center gap-1.5 rounded-full border border-[#EADBCE] text-[#685D52] hover:text-[#8D6527] hover:border-[#C59B4B] hover:bg-[#FAF7F2] text-xs px-3 py-2 transition-all"
-              title="دخول الإدارة"
-            >
-              <ShieldCheck className="w-4 h-4 text-[#C59B4B]" />
-              <span className="hidden xl:inline">دخول الإدارة</span>
-            </button>
-
             {/* Cart Button */}
             <button
               onClick={() => setCartOpen(true)}
@@ -240,14 +222,7 @@ export default function Navbar({
               </div>
             </div>
 
-            <div className="pt-2 border-t border-[#EADBCE] flex justify-between items-center">
-              <button
-                onClick={() => { setMenuOpen(false); onAdminClick() }}
-                className="text-xs text-[#8D6527] font-semibold flex items-center gap-1.5"
-              >
-                <ShieldCheck className="w-4 h-4" />
-                تسجيل دخول الإدارة
-              </button>
+            <div className="pt-2 border-t border-[#EADBCE]">
               <span className="text-[11px] text-[#968B7E]">متجر الهدى للتطريز</span>
             </div>
           </div>

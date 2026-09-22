@@ -1,16 +1,21 @@
 import { Link } from 'react-router-dom'
-import { Phone, Mail, MapPin, MessageCircle, Heart, Sparkles, ShieldCheck } from 'lucide-react'
+import { Phone, Mail, MapPin, MessageCircle, Heart, Sparkles, ShieldCheck, Camera, ThumbsUp, Music2 } from 'lucide-react'
 import type { SiteSettings } from '../../types'
 
 export default function Footer({ settings }: { settings: SiteSettings }) {
   const whatsappNumber = settings.whatsappNumber || settings.phone
+  const socialLinks = [
+    { name: 'إنستغرام', href: settings.socialLinks?.instagram, icon: Camera, hoverClass: 'hover:text-pink-400' },
+    { name: 'فيسبوك', href: settings.socialLinks?.facebook, icon: ThumbsUp, hoverClass: 'hover:text-blue-400' },
+    { name: 'تيك توك', href: settings.socialLinks?.tiktok, icon: Music2, hoverClass: 'hover:text-white' },
+  ].filter((link): link is typeof link & { href: string } => Boolean(link.href))
 
   return (
     <footer className="bg-[#18110B] text-white border-t border-[#332317]">
       {/* Main Footer Content */}
       <div className="container py-16 lg:py-20">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10 lg:gap-12">
-          
+
           {/* Col 1: Brand & Identity */}
           <div>
             <Link to="/" className="flex items-center gap-3 no-underline text-white mb-5 group">
@@ -22,7 +27,7 @@ export default function Footer({ settings }: { settings: SiteSettings }) {
                   {settings.storeName.replace(' للتطريز', '')}
                 </span>
                 <span className="text-[10px] tracking-[2px] text-[#DFB76C] font-semibold mt-0.5">
-                  للتطريز اليدوي الفاخر
+                  للأشغال اليدوية
                 </span>
               </div>
             </Link>
@@ -48,7 +53,6 @@ export default function Footer({ settings }: { settings: SiteSettings }) {
                 { label: 'أقسام المتجر', to: '/categories' },
                 { label: 'جميع المنتجات المطرزة', to: '/products' },
                 { label: 'قصة الحرفية والبراند', to: '/#story' },
-                { label: 'دخول لوحة الإدارة', to: '/admin/login' },
               ].map(({ label, to }) => (
                 <li key={to}>
                   <Link
@@ -107,7 +111,7 @@ export default function Footer({ settings }: { settings: SiteSettings }) {
             </div>
           </div>
 
-          {/* Col 4: Quality Guarantee */}
+          {/* Col 4: Quality Guarantee & Social Links */}
           <div>
             <h4 className="text-xs font-bold text-[#DFB76C] tracking-widest uppercase mb-6">
               ضمان الهدى
@@ -126,6 +130,26 @@ export default function Footer({ settings }: { settings: SiteSettings }) {
                 </p>
               </div>
             </div>
+            {socialLinks.length > 0 && (
+              <div className="mt-5">
+                <h5 className="text-xs font-bold text-[#DFB76C] mb-3">تابعينا على</h5>
+                <div className="flex items-center gap-2">
+                  {socialLinks.map(({ name, href, icon: Icon, hoverClass }) => (
+                    <a
+                      key={name}
+                      href={href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`زيارة ${name}`}
+                      title={name}
+                      className={`w-9 h-9 rounded-xl bg-white/10 border border-white/10 text-white/75 flex items-center justify-center transition-colors ${hoverClass}`}
+                    >
+                      <Icon className="w-4 h-4" />
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
         </div>
@@ -142,6 +166,16 @@ export default function Footer({ settings }: { settings: SiteSettings }) {
             <Heart className="w-3.5 h-3.5 text-rose-500 fill-rose-500" />
             <span>لتتألقي بأجمل تفاصيلكِ</span>
           </div>
+          <a
+            href="https://wa.me/972592133357"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-white/70 hover:border-emerald-400/60 hover:bg-emerald-400/10 hover:text-emerald-300 no-underline transition-all"
+            aria-label="التواصل مع مطور الموقع، م. محمد الجوجو، عبر واتساب"
+          >
+            <MessageCircle className="w-4 h-4 text-emerald-400" />
+            <span className="text-[11px] font-semibold">تطوير م.محمد الجوجو</span>
+          </a>
         </div>
       </div>
     </footer>

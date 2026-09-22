@@ -46,7 +46,7 @@ export default function AdminLayout({ user, onLogout, children }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-[#FAF7F2] text-[#221811] flex antialiased">
+    <div className="min-h-screen bg-[#FAF7F2] text-[#221811] flex antialiased overflow-x-hidden">
 
       {/* ── Mobile Backdrop ── */}
       {sidebarOpen && (
@@ -141,7 +141,7 @@ export default function AdminLayout({ user, onLogout, children }: Props) {
       {/* ══════════════════════════════
           MAIN CONTENT AREA
          ══════════════════════════════ */}
-      <main className="flex-1 lg:mr-72 min-h-screen flex flex-col pb-20 lg:pb-0">
+      <main className="flex-1 min-w-0 lg:mr-72 min-h-screen flex flex-col pb-20 lg:pb-0">
 
         {/* Top Header Bar */}
         <header className="sticky top-0 z-20 bg-white/95 backdrop-blur-md border-b border-[#EADBCE] px-4 sm:px-6 py-3 flex items-center justify-between shadow-xs shrink-0">
@@ -171,7 +171,7 @@ export default function AdminLayout({ user, onLogout, children }: Props) {
         </header>
 
         {/* Page Content */}
-        <div className="p-4 sm:p-6 lg:p-8 flex-1">
+        <div className="p-4 sm:p-6 lg:p-8 flex-1 min-w-0">
           {children}
         </div>
       </main>

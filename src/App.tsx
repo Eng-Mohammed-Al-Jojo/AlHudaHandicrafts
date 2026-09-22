@@ -20,6 +20,8 @@ import {
   deleteCategoryFromFirestore,
   addOrderToFirestore,
   updateOrderStatusInFirestore,
+  updateOrderInFirestore,
+  deleteOrderFromFirestore,
   seedInitialDatabase,
   clearAllFirestoreData
 } from './firebase'
@@ -79,11 +81,9 @@ function ScrollManager() {
 }
 
 // ─── Store Layout ─────────────────────────────────────────────────────────────
-function StoreLayout({ children, cartData, adminUser, onAdminClick, onCheckout, settings }: {
+function StoreLayout({ children, cartData, onCheckout, settings }: {
   children: React.ReactNode
   cartData: ReturnType<typeof useCart>
-  adminUser: FirebaseUser | null
-  onAdminClick: () => void
   onCheckout: () => void
   settings: SiteSettings
 }) {
@@ -93,11 +93,9 @@ function StoreLayout({ children, cartData, adminUser, onAdminClick, onCheckout, 
         cartCount={cartData.count}
         cartTotal={cartData.total}
         cartItems={cartData.items}
-        user={adminUser}
         onRemoveItem={cartData.removeItem}
         onUpdateQty={cartData.updateQty}
         onCheckout={onCheckout}
-        onAdminClick={onAdminClick}
         settings={settings}
       />
       <div className="flex-1">
@@ -146,19 +144,6 @@ export default function App() {
   function handleAdminLogout() {
     void signOutAdmin().catch(err => console.warn('Firebase sign-out error:', err))
     handleSetAdminUser(null)
-  }
-
-  // The storefront is public. Opening the admin area from it always starts a
-  // fresh authentication flow, even if a previous administrator used this tab.
-  async function handleStoreAdminAccess() {
-    try {
-      await signOutAdmin()
-    } catch (err) {
-      console.warn('Firebase sign-out before admin login error:', err)
-    } finally {
-      handleSetAdminUser(null)
-      window.location.assign('/admin/login')
-    }
   }
 
   // Firebase Auth, not localStorage, is the source of truth for protected data.
@@ -382,6 +367,30 @@ export default function App() {
     }
   }
 
+  async function handleUpdateOrder(order: Order) {
+    try {
+      await updateOrderInFirestore(order.id, order)
+      setOrders(prev => prev.map(item => item.id === order.id ? order : item))
+      notify('تم حفظ تعديلات الطلب في قاعدة البيانات')
+    } catch (err) {
+      console.error('Update order error:', err)
+      notify('تعذر حفظ تعديلات الطلب. تحققي من اتصالك وصلاحيات الإدارة.', 'error')
+      throw err
+    }
+  }
+
+  async function handleDeleteOrder(id: string) {
+    try {
+      await deleteOrderFromFirestore(id)
+      setOrders(prev => prev.filter(order => order.id !== id))
+      notify('تم حذف الطلب نهائياً من قاعدة البيانات')
+    } catch (err) {
+      console.error('Delete order error:', err)
+      notify('تعذر حذف الطلب. لم يتم تغيير أي بيانات.', 'error')
+      throw err
+    }
+  }
+
   // ─── Database Seeding & Clear Actions ─────────────────────────────────────────
   async function handleSeedDatabase() {
     try {
@@ -417,8 +426,6 @@ export default function App() {
           element={
             <StoreLayout
               cartData={cart}
-              adminUser={adminUser}
-              onAdminClick={handleStoreAdminAccess}
               onCheckout={() => setCheckoutOpen(true)}
               settings={settings}
             >
@@ -445,8 +452,6 @@ export default function App() {
           element={
             <StoreLayout
               cartData={cart}
-              adminUser={adminUser}
-              onAdminClick={handleStoreAdminAccess}
               onCheckout={() => setCheckoutOpen(true)}
               settings={settings}
             >
@@ -463,8 +468,6 @@ export default function App() {
           element={
             <StoreLayout
               cartData={cart}
-              adminUser={adminUser}
-              onAdminClick={handleStoreAdminAccess}
               onCheckout={() => setCheckoutOpen(true)}
               settings={settings}
             >
@@ -546,7 +549,9 @@ export default function App() {
                 <AdminOrders
                   orders={orders}
                   onUpdateStatus={handleUpdateOrderStatus}
-                  notify={msg => notify(msg)}
+                  onUpdate={handleUpdateOrder}
+                  onDelete={handleDeleteOrder}
+                  notify={(msg, type) => notify(msg, type ?? 'success')}
                 />
               </AdminLayout>
             </AdminGuard>

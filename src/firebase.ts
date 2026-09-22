@@ -149,6 +149,9 @@ export function subscribeToSiteSettings(onSuccess: (settings: SiteSettings) => v
   return onSnapshot(doc(db, SETTINGS_COLLECTION, SETTINGS_DOCUMENT), (snapshot) => {
     if (snapshot.exists()) {
       const data = snapshot.data() as Partial<SiteSettings>
+      const storedSocialLinks = data.socialLinks && typeof data.socialLinks === 'object'
+        ? data.socialLinks as Partial<SiteSettings['socialLinks']>
+        : {}
       onSuccess({
         ...DEFAULT_SITE_SETTINGS,
         ...data,
@@ -156,6 +159,11 @@ export function subscribeToSiteSettings(onSuccess: (settings: SiteSettings) => v
         ordersEnabled: data.ordersEnabled ?? true,
         usdRate: Number(data.usdRate ?? DEFAULT_SITE_SETTINGS.usdRate) > 0 ? Number(data.usdRate) : DEFAULT_SITE_SETTINGS.usdRate,
         eurRate: Number(data.eurRate ?? DEFAULT_SITE_SETTINGS.eurRate) > 0 ? Number(data.eurRate) : DEFAULT_SITE_SETTINGS.eurRate,
+        socialLinks: {
+          instagram: typeof storedSocialLinks.instagram === 'string' ? storedSocialLinks.instagram : '',
+          facebook: typeof storedSocialLinks.facebook === 'string' ? storedSocialLinks.facebook : '',
+          tiktok: typeof storedSocialLinks.tiktok === 'string' ? storedSocialLinks.tiktok : '',
+        },
       })
     }
   }, (err) => onError?.(err))
@@ -357,6 +365,19 @@ export async function addOrderToFirestore(order: Omit<Order, 'id'>): Promise<str
 export async function updateOrderStatusInFirestore(id: string, status: OrderStatus): Promise<void> {
   const docRef = doc(db, ORDERS_COLLECTION, id)
   await updateDoc(docRef, { status })
+}
+
+/** Update the editable details of an existing order. */
+export async function updateOrderInFirestore(id: string, updates: Partial<Order>): Promise<void> {
+  const cleanUpdates = { ...updates }
+  delete (cleanUpdates as Record<string, unknown>).id
+  delete (cleanUpdates as Record<string, unknown>).createdAt
+  await updateDoc(doc(db, ORDERS_COLLECTION, id), cleanUpdates)
+}
+
+/** Permanently remove one order; Firestore rules restrict this to administrators. */
+export async function deleteOrderFromFirestore(id: string): Promise<void> {
+  await deleteDoc(doc(db, ORDERS_COLLECTION, id))
 }
 
 // ─── FIRESTORE: Subscribers (Newsletter) ──────────────────────────────────────
