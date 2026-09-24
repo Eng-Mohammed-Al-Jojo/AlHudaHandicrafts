@@ -18,7 +18,7 @@ import { useCurrency } from '../../context/CurrencyContext'
 
 interface Props {
   product: Product
-  onAddToCart: (p: Product) => void
+  onAddToCart: (p: Product, quantity?: number) => void
   onClose: () => void
 }
 
@@ -37,9 +37,7 @@ export default function ProductModal({ product, onAddToCart, onClose }: Props) {
   const next = () => setActiveIdx(i => (i + 1) % images.length)
 
   function handleAdd() {
-    for (let i = 0; i < qty; i++) {
-      onAddToCart(product)
-    }
+    onAddToCart(product, qty)
     setAdded(true)
     setTimeout(() => {
       setAdded(false)
@@ -144,6 +142,24 @@ export default function ProductModal({ product, onAddToCart, onClose }: Props) {
 
         {/* ── Product Details Side ── */}
         <div className="lg:col-span-7 p-5 sm:p-7 lg:p-9 flex flex-col bg-white">
+          {/* Brand lockup kept in the content column, away from the close control. */}
+          <div className="flex items-center justify-between gap-3 mb-5">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <img
+                src="/icon.svg"
+                alt="شعار متجر الهدى"
+                className="w-10 h-10 rounded-xl border border-[#C59B4B]/40 bg-[#FAF7F2] object-cover shrink-0"
+              />
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-[#8D6527] m-0 truncate">متجر الهدى للتطريز</p>
+                <p className="text-[10px] text-[#968B7E] m-0 mt-0.5">معاينة القطعة</p>
+              </div>
+            </div>
+            <span className="hidden sm:inline-flex text-[10px] font-bold text-[#8D6527] bg-[#FAF7F2] border border-[#EADBCE] rounded-full px-2.5 py-1 shrink-0">
+              تفاصيل المنتج
+            </span>
+          </div>
+
           {/* Padding top on mobile so content doesn't hide behind close btn */}
           <div className="pt-6 sm:pt-4 lg:pt-0">
 

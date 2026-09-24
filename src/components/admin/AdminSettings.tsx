@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Settings, Save, Sparkles, MessageCircle, LayoutDashboard, Truck, Phone, Mail, MapPin, Power, CheckCircle2, AlertTriangle, Coins, DollarSign, Euro, Camera, ThumbsUp, Music2 } from 'lucide-react'
-import type { SiteSettings } from '../../types'
+import { Settings, Save, Sparkles, MessageCircle, LayoutDashboard, Truck, Phone, Mail, MapPin, Power, CheckCircle2, AlertTriangle, Coins, DollarSign, Euro, Camera, ThumbsUp, Music2, Plus, Trash2 } from 'lucide-react'
+import { DEFAULT_SITE_SETTINGS, type SiteSettings, type PaymentMethod, type PaymentMethodDetails } from '../../types'
 
 interface Props {
   settings: SiteSettings
@@ -10,13 +10,38 @@ interface Props {
 
 export default function AdminSettings({ settings, onSave, notify }: Props) {
   const [draft, setDraft] = useState(settings)
+  const [cityInput, setCityInput] = useState('')
   const [saving, setSaving] = useState(false)
 
   useEffect(() => setDraft(settings), [settings])
+  const usdPreviewRate = Number(draft.usdRate) > 0 ? Number(draft.usdRate) : DEFAULT_SITE_SETTINGS.usdRate
+  const eurPreviewRate = Number(draft.eurRate) > 0 ? Number(draft.eurRate) : DEFAULT_SITE_SETTINGS.eurRate
   const field = (key: keyof SiteSettings, value: string | number | boolean) =>
     setDraft(current => ({ ...current, [key]: value }))
   const socialField = (key: keyof SiteSettings['socialLinks'], value: string) =>
     setDraft(current => ({ ...current, socialLinks: { ...current.socialLinks, [key]: value } }))
+  const paymentField = (id: SiteSettings['paymentMethods'][number]['id'], patch: Partial<SiteSettings['paymentMethods'][number]>) =>
+    setDraft(current => ({
+      ...current,
+      paymentMethods: current.paymentMethods.map(method => method.id === id ? { ...method, ...patch } : method),
+    }))
+
+  function addDeliveryCity() {
+    const city = cityInput.trim()
+    if (!city) return
+    setDraft(current => ({
+      ...current,
+      deliveryCities: Array.from(new Set([...current.deliveryCities, city])),
+    }))
+    setCityInput('')
+  }
+
+  function removeDeliveryCity(city: string) {
+    setDraft(current => ({
+      ...current,
+      deliveryCities: current.deliveryCities.filter(item => item !== city),
+    }))
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault()
@@ -36,10 +61,53 @@ export default function AdminSettings({ settings, onSave, notify }: Props) {
       notify('أدخلي رابطاً كاملاً وآمناً يبدأ بـ https:// أو http:// لحسابات التواصل.', 'error')
       return
     }
+    const paymentMethods = draft.paymentMethods.map(method => ({
+      ...method,
+      label: method.label.trim(),
+      accountName: (method.accountName ?? '').trim(),
+      accountNumber: (method.accountNumber ?? '').trim(),
+      iban: (method.iban ?? '').trim(),
+      branch: (method.branch ?? '').trim(),
+      instructions: (method.instructions ?? method.details ?? '').trim(),
+      paymentLink: (method.paymentLink ?? '').trim(),
+      // Keep the old field in sync for older clients and messages.
+      details: (method.instructions ?? method.details ?? '').trim(),
+    }))
+    if (!paymentMethods.some(method => method.enabled)) {
+      notify('فعّلي طريقة دفع واحدة على الأقل قبل حفظ الإعدادات.', 'error')
+      return
+    }
+    const invalidPaymentMethod = paymentMethods.find(method => {
+      if (!method.enabled) return false
+      if (method.paymentLink) {
+        try {
+          const parsed = new URL(method.paymentLink)
+          if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return true
+        } catch {
+          return true
+        }
+      }
+      if (method.id === 'other') return !method.instructions
+      if (method.id === 'bank_palestine') {
+        return !method.accountName || (!method.accountNumber && !method.iban)
+      }
+      return !method.accountNumber
+    })
+    if (invalidPaymentMethod) {
+      const label = invalidPaymentMethod.label || 'طريقة الدفع'
+      notify(`أضيفي بيانات الدفع الصحيحة للبن «${label}» قبل تفعيله.`, 'error')
+      return
+    }
     const normalized = {
       ...draft,
       whatsappNumber: draft.whatsappNumber.replace(/[^0-9]/g, ''),
+      deliveryCities: Array.from(new Set(draft.deliveryCities.map(city => city.trim()).filter(Boolean))),
+      paymentMethods,
       socialLinks,
+    }
+    if (!Number.isFinite(normalized.usdRate) || normalized.usdRate <= 0 || !Number.isFinite(normalized.eurRate) || normalized.eurRate <= 0) {
+      notify('أدخلي سعر صرف صحيحاً وأكبر من صفر للدولار واليورو.', 'error')
+      return
     }
     if (normalized.orderRouting === 'whatsapp' && !normalized.whatsappNumber) {
       notify('أدخلي رقم واتساب بصيغة دولية قبل تفعيل التحويل إلى واتساب.', 'error')
@@ -232,6 +300,59 @@ export default function AdminSettings({ settings, onSave, notify }: Props) {
 
         </div>
 
+        {/* Delivery Cities */}
+        <div className="pt-6 border-t border-[#EADBCE]">
+          <div className="flex items-center gap-2 mb-1">
+            <MapPin className="w-5 h-5 text-[#8D6527]" />
+            <h4 className="font-serif text-lg font-bold text-[#221811] m-0" style={{ fontFamily: 'Amiri, serif' }}>
+              مدن التوصيل
+            </h4>
+          </div>
+          <p className="text-xs text-[#685D52] m-0 mb-4">أضيفي المدن التي تريدين عرضها للعميلة في حقل المدينة داخل نافذة الطلب.</p>
+          <div className="flex flex-wrap gap-2 mb-3">
+            {draft.deliveryCities.map(city => (
+              <span key={city} className="inline-flex items-center gap-1.5 rounded-full border border-[#EADBCE] bg-[#FAF7F2] px-3 py-1.5 text-xs text-[#685D52]">
+                {city}
+                <button type="button" onClick={() => removeDeliveryCity(city)} className="text-[#968B7E] hover:text-red-600" aria-label={`حذف ${city}`}><Trash2 className="w-3.5 h-3.5" /></button>
+              </span>
+            ))}
+            {draft.deliveryCities.length === 0 && <span className="text-xs text-[#968B7E]">لم تُضف مدن بعد.</span>}
+          </div>
+          <div className="flex gap-2">
+            <input
+              value={cityInput}
+              onChange={event => setCityInput(event.target.value)}
+              onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); addDeliveryCity() } }}
+              placeholder="مثال: النصر أو الرمال"
+              className="flex-1 bg-[#FAF7F2] border border-[#EADBCE] rounded-xl px-3.5 py-2.5 text-xs text-[#221811] outline-none focus:border-[#8D6527] focus:bg-white"
+            />
+            <button type="button" onClick={addDeliveryCity} className="inline-flex items-center gap-1.5 rounded-xl bg-[#8D6527] hover:bg-[#704F1E] px-4 py-2.5 text-xs font-bold text-white"><Plus className="w-4 h-4" />إضافة</button>
+          </div>
+        </div>
+
+        {/* Payment Methods */}
+        <div className="pt-6 border-t border-[#EADBCE]">
+          <div className="flex items-center gap-2 mb-1">
+            <Coins className="w-5 h-5 text-[#8D6527]" />
+            <h4 className="font-serif text-lg font-bold text-[#221811] m-0" style={{ fontFamily: 'Amiri, serif' }}>
+              طرق الدفع وتأكيد الدفع
+            </h4>
+          </div>
+          <p className="text-xs text-[#685D52] m-0 mb-4">
+            أضيفي بيانات كل طريقة وشرحها هنا. لن يمكن إنهاء الطلب كـ«مكتمل» من لوحة التحكم قبل تسجيل تأكيد الدفع.
+          </p>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {draft.paymentMethods.map(method => (
+              <PaymentMethodEditor
+                key={method.id}
+                method={method}
+                onToggle={enabled => paymentField(method.id, { enabled })}
+                onFieldChange={(key, value) => paymentField(method.id, { [key]: value })}
+              />
+            ))}
+          </div>
+        </div>
+
         {/* Social Media */}
         <div className="pt-6 border-t border-[#EADBCE]">
           <div className="flex items-center gap-2 mb-1">
@@ -307,7 +428,7 @@ export default function AdminSettings({ settings, onSave, notify }: Props) {
             </h4>
           </div>
           <p className="text-xs text-[#685D52] m-0 mb-4">
-            يتم تخزين أسعار المنتجات بالشيكل كأساس، ويتم التحويل تلقائياً عند اختيار الزبون للدولار أو اليورو من المتجر بناءً على هذه الأسعار.
+            أسعار المنتجات والإجماليات الأساسية تُحفظ وتُدار بالشيكل. يغيّر هذا الإعداد قيمة العرض بالدولار أو اليورو فقط، وتُحفظ نسخة من العملة وسعر الصرف داخل كل طلب حتى لا تتغير مع تعديلات الأسعار لاحقاً.
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -326,17 +447,17 @@ export default function AdminSettings({ settings, onSave, notify }: Props) {
                   step="0.01"
                   min="0.1"
                   required
-                  value={String(draft.usdRate ?? 3.65)}
+                  value={String(draft.usdRate ?? DEFAULT_SITE_SETTINGS.usdRate)}
                   onChange={e => field('usdRate', parseFloat(e.target.value) || 0)}
                   className="w-full bg-white border border-[#EADBCE] rounded-xl px-3.5 py-2.5 text-xs text-[#221811] outline-none focus:border-[#8D6527] transition-all"
-                  placeholder="3.65"
+                  placeholder={String(DEFAULT_SITE_SETTINGS.usdRate)}
                 />
                 <span className="absolute left-3.5 top-2.5 text-xs text-[#968B7E] font-medium">شيكل</span>
               </div>
               <p className="text-[11px] text-[#685D52] mt-2 m-0">
                 مثال: قطعة بسعر 100 شيكل ستظهر للزبون بـ{' '}
                 <strong className="text-emerald-700">
-                  ${(100 / (draft.usdRate || 3.65)).toFixed(2)}
+                  ${(100 / usdPreviewRate).toFixed(2)}
                 </strong>
               </p>
             </div>
@@ -356,17 +477,17 @@ export default function AdminSettings({ settings, onSave, notify }: Props) {
                   step="0.01"
                   min="0.1"
                   required
-                  value={String(draft.eurRate ?? 3.95)}
+                  value={String(draft.eurRate ?? DEFAULT_SITE_SETTINGS.eurRate)}
                   onChange={e => field('eurRate', parseFloat(e.target.value) || 0)}
                   className="w-full bg-white border border-[#EADBCE] rounded-xl px-3.5 py-2.5 text-xs text-[#221811] outline-none focus:border-[#8D6527] transition-all"
-                  placeholder="3.95"
+                  placeholder={String(DEFAULT_SITE_SETTINGS.eurRate)}
                 />
                 <span className="absolute left-3.5 top-2.5 text-xs text-[#968B7E] font-medium">شيكل</span>
               </div>
               <p className="text-[11px] text-[#685D52] mt-2 m-0">
                 مثال: قطعة بسعر 100 شيكل ستظهر للزبون بـ{' '}
                 <strong className="text-blue-700">
-                  €{(100 / (draft.eurRate || 3.95)).toFixed(2)}
+                  €{(100 / eurPreviewRate).toFixed(2)}
                 </strong>
               </p>
             </div>
@@ -413,5 +534,87 @@ function SocialLinkField({ icon: Icon, label, placeholder, value, onChange }: {
         className="w-full bg-[#FAF7F2] border border-[#EADBCE] rounded-xl px-3.5 py-2.5 text-xs text-[#221811] outline-none focus:border-[#8D6527] focus:bg-white transition-all text-left"
       />
     </div>
+  )
+}
+
+function PaymentMethodEditor({ method, onToggle, onFieldChange }: {
+  method: PaymentMethod
+  onToggle: (enabled: boolean) => void
+  onFieldChange: (key: keyof PaymentMethodDetails, value: string) => void
+}) {
+  const isBank = method.id === 'bank_palestine'
+  const isOther = method.id === 'other'
+  const configured = isOther
+    ? Boolean((method.instructions ?? method.details ?? '').trim())
+    : method.id === 'bank_palestine'
+      ? Boolean(method.accountName?.trim() && (method.accountNumber?.trim() || method.iban?.trim()))
+      : Boolean(method.accountNumber?.trim())
+  const fieldClass = 'w-full bg-white border border-[#EADBCE] rounded-xl px-3 py-2.5 text-xs text-[#221811] outline-none focus:border-[#8D6527] transition-all disabled:cursor-not-allowed disabled:bg-[#FAF7F2]'
+
+  return (
+    <div className={`p-4 rounded-2xl border transition-colors ${method.enabled ? 'border-[#C59B4B]/50 bg-[#FAF7F2]/60' : 'border-[#EADBCE] bg-white opacity-75'}`}>
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-9 h-9 rounded-xl bg-white border border-[#EADBCE] text-[#8D6527] flex items-center justify-center shrink-0">
+            <Coins className="w-4 h-4" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs font-bold text-[#221811] m-0">{method.label}</p>
+            <p className={`text-[10px] m-0 mt-0.5 ${method.enabled && !configured ? 'text-amber-700' : 'text-[#968B7E]'}`}>{method.enabled ? configured ? 'مفعّلة — جاهزة للعرض' : 'مفعّلة — تحتاج بيانات' : 'معطلة'}</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => onToggle(!method.enabled)}
+          className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors p-0.5 ${method.enabled ? 'bg-emerald-600' : 'bg-stone-300'}`}
+          role="switch"
+          aria-checked={method.enabled}
+          aria-label={`${method.enabled ? 'تعطيل' : 'تفعيل'} ${method.label}`}
+        >
+          <span className={`inline-block h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${method.enabled ? 'ms-auto' : 'me-auto'}`} />
+        </button>
+      </div>
+
+      <PaymentInput label={isOther ? 'اسم صاحب الحساب (اختياري)' : 'اسم صاحب الحساب / المحفظة'} value={method.accountName} onChange={value => onFieldChange('accountName', value)} disabled={!method.enabled} placeholder="مثال: اسم صاحب الحساب" />
+      <PaymentInput label={isBank ? 'رقم الحساب' : isOther ? 'رقم الحساب أو الجوال (اختياري)' : 'رقم الجوال / المحفظة'} value={method.accountNumber} onChange={value => onFieldChange('accountNumber', value)} disabled={!method.enabled} placeholder={isBank ? 'أدخلي رقم الحساب' : 'مثال: 0591234567'} dir="ltr" />
+      {isBank && <PaymentInput label="الـ IBAN (اختياري إذا كان رقم الحساب كافياً)" value={method.iban} onChange={value => onFieldChange('iban', value)} disabled={!method.enabled} placeholder="PS00XXXXXXXXXXXXXXXXXXXX" dir="ltr" />}
+      {isBank && <PaymentInput label="اسم الفرع / البنك" value={method.branch} onChange={value => onFieldChange('branch', value)} disabled={!method.enabled} placeholder="مثال: فرع غزة" />}
+      <PaymentInput label="رابط الدفع (اختياري)" value={method.paymentLink} onChange={value => onFieldChange('paymentLink', value)} disabled={!method.enabled} placeholder="https://..." dir="ltr" />
+
+      <label className="block text-[11px] font-semibold text-[#685D52] mt-3 mb-1.5">
+        {isOther ? 'شرح طريقة الدفع وخطوات التأكيد *' : 'تعليمات الدفع (اختياري)'}
+      </label>
+      <textarea
+        rows={isOther ? 4 : 2}
+        value={method.instructions ?? method.details ?? ''}
+        onChange={event => onFieldChange('instructions', event.target.value)}
+        placeholder={isOther ? 'اكتبي طريقة الدفع والخطوات التي يجب أن تتبعها العميلة' : 'مثال: أرسلي رقم العملية بعد التحويل'}
+        className={`${fieldClass} resize-none`}
+        disabled={!method.enabled}
+      />
+    </div>
+  )
+}
+
+function PaymentInput({ label, value, onChange, disabled, placeholder, dir }: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  disabled: boolean
+  placeholder: string
+  dir?: 'ltr' | 'rtl'
+}) {
+  return (
+    <label className="block mt-3 first:mt-0">
+      <span className="block text-[11px] font-semibold text-[#685D52] mb-1.5">{label}</span>
+      <input
+        value={value}
+        onChange={event => onChange(event.target.value)}
+        disabled={disabled}
+        placeholder={placeholder}
+        dir={dir}
+        className="w-full bg-white border border-[#EADBCE] rounded-xl px-3 py-2.5 text-xs text-[#221811] outline-none focus:border-[#8D6527] transition-all disabled:cursor-not-allowed disabled:bg-[#FAF7F2]"
+      />
+    </label>
   )
 }

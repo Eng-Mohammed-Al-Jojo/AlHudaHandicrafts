@@ -35,11 +35,32 @@ export type Product = {
 }
 
 export type OrderStatus = 'جديد' | 'قيد التجهيز' | 'تم التواصل' | 'مكتمل' | 'ملغي'
+export type ShippingStatus = 'free' | 'standard'
+export type PaymentStatus = 'pending' | 'paid'
+export type PaymentMethodId = 'jawwalpay' | 'palpay' | 'bank_palestine' | 'other'
+
+export type PaymentMethodDetails = {
+  accountName: string
+  accountNumber: string
+  iban: string
+  branch: string
+  instructions: string
+  paymentLink: string
+}
+
+export type PaymentMethod = PaymentMethodDetails & {
+  id: PaymentMethodId
+  label: string
+  enabled: boolean
+  /** Legacy field kept for settings saved by older versions. */
+  details: string
+}
 
 export type OrderItem = {
   productId: string
   productName: string
   price: number
+  quantity?: number
   image: string
 }
 
@@ -48,11 +69,26 @@ export type Order = {
   customer: string
   phone?: string
   email?: string
+  governorate?: string
+  city?: string
   address?: string
+  deliveryNotes?: string
   notes?: string
   items: OrderItem[]
   total: number
   itemsCount: number
+  displayCurrency?: CurrencyCode
+  displayRate?: number
+  displayTotal?: number
+  shippingStatus?: ShippingStatus
+  shippingThreshold?: number
+  paymentStatus?: PaymentStatus
+  requestedPaymentMethod?: PaymentMethodId
+  paymentMethod?: PaymentMethodId
+  paymentMethodLabel?: string
+  paymentDetails?: PaymentMethodDetails
+  paymentReference?: string
+  paymentConfirmedAt?: string
   status: OrderStatus
   createdAt: string
 }
@@ -85,6 +121,8 @@ export type SiteSettings = {
   address: string
   orderRouting: OrderRouting
   freeShippingThreshold: number
+  deliveryCities: string[]
+  paymentMethods: PaymentMethod[]
   ordersEnabled: boolean
   usdRate: number
   eurRate: number
@@ -99,6 +137,13 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
   address: '',
   orderRouting: 'dashboard',
   freeShippingThreshold: 350,
+  deliveryCities: ['غزة', 'النصر', 'الرمال', 'التجمع', 'دير البلح', 'خان يونس', 'رفح', 'شمال غزة'],
+  paymentMethods: [
+    { id: 'jawwalpay', label: 'جوال باي', enabled: true, accountName: '', accountNumber: '', iban: '', branch: '', instructions: '', paymentLink: '', details: '' },
+    { id: 'palpay', label: 'بال باي', enabled: true, accountName: '', accountNumber: '', iban: '', branch: '', instructions: '', paymentLink: '', details: '' },
+    { id: 'bank_palestine', label: 'بنك فلسطين', enabled: true, accountName: '', accountNumber: '', iban: '', branch: '', instructions: '', paymentLink: '', details: '' },
+    { id: 'other', label: 'طريقة أخرى', enabled: false, accountName: '', accountNumber: '', iban: '', branch: '', instructions: '', paymentLink: '', details: '' },
+  ],
   ordersEnabled: true,
   usdRate: 3.65,
   eurRate: 3.95,

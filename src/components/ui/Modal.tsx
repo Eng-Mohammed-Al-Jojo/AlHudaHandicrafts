@@ -18,10 +18,15 @@ export default function Modal({
   showDefaultClose = false,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null)
+  const onCloseRef = useRef(onClose)
+
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') onCloseRef.current()
     }
     const previousOverflow = document.body.style.overflow
     const previousPaddingInlineEnd = document.body.style.paddingInlineEnd
@@ -39,7 +44,7 @@ export default function Modal({
       document.body.style.overflow = previousOverflow
       document.body.style.paddingInlineEnd = previousPaddingInlineEnd
     }
-  }, [onClose])
+  }, [])
 
   const maxW = {
     sm: 'max-w-md',

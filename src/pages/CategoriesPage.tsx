@@ -7,7 +7,7 @@ interface Props {
 }
 
 export default function CategoriesPage({ categories }: Props) {
-  const visible = categories.filter(c => c.isVisible).sort((a, b) => a.order - b.order)
+  const visible = [...categories].filter(c => c.isVisible).sort((a, b) => a.order - b.order)
 
   return (
     <div className="min-h-screen animate-fade-in bg-white">

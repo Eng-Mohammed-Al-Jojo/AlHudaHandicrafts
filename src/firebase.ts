@@ -10,18 +10,23 @@ import {
 import {
   getFirestore,
   collection,
+  query,
+  where,
   doc,
+  getDoc,
   getDocs,
   setDoc,
   addDoc,
   updateDoc,
   deleteDoc,
+  deleteField,
   onSnapshot,
   serverTimestamp,
   writeBatch
 } from 'firebase/firestore'
-import type { Product, Category, Order, OrderStatus, SiteSettings, NewsletterSubscriber } from './types'
+import type { Product, Category, Order, OrderStatus, SiteSettings, NewsletterSubscriber, PaymentMethod, PaymentMethodDetails, PaymentMethodId } from './types'
 import { DEFAULT_SITE_SETTINGS } from './types'
+import { getFreeShippingThreshold } from './utils/commerce'
 
 export const firebaseConfig = {
   apiKey: 'AIzaSyBpUaD5Jk-H3Ip6szA9iKgYBwinE0SMwUQ',
@@ -30,6 +35,21 @@ export const firebaseConfig = {
   storageBucket: 'e-com-huda.firebasestorage.app',
   messagingSenderId: '785342691435',
   appId: '1:785342691435:web:601e664d0be4c43d97d92e',
+}
+
+function withoutUndefinedFields<T extends object>(value: T): T {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, fieldValue]) => fieldValue !== undefined)
+  ) as T
+}
+
+function withDeletedUndefinedFields<T extends object>(value: T): T {
+  return Object.fromEntries(
+    Object.entries(value).map(([key, fieldValue]) => [
+      key,
+      fieldValue === undefined ? deleteField() : fieldValue,
+    ])
+  ) as T
 }
 
 // Initialize Firebase App & Firestore
@@ -143,6 +163,37 @@ const ORDERS_COLLECTION = 'orders'
 const SETTINGS_COLLECTION = 'settings'
 const SETTINGS_DOCUMENT = 'store'
 const SUBSCRIBERS_COLLECTION = 'subscribers'
+function normalizePaymentDetails(value: unknown, fallback: PaymentMethodDetails): PaymentMethodDetails {
+  const saved = value && typeof value === 'object' ? value as Record<string, unknown> : {}
+  return {
+    accountName: typeof saved.accountName === 'string' ? saved.accountName : fallback.accountName,
+    accountNumber: typeof saved.accountNumber === 'string' ? saved.accountNumber : fallback.accountNumber,
+    iban: typeof saved.iban === 'string' ? saved.iban : fallback.iban,
+    branch: typeof saved.branch === 'string' ? saved.branch : fallback.branch,
+    instructions: typeof saved.instructions === 'string' ? saved.instructions : fallback.instructions,
+    paymentLink: typeof saved.paymentLink === 'string' ? saved.paymentLink : fallback.paymentLink,
+  }
+}
+
+function normalizePaymentMethods(value: unknown): PaymentMethod[] {
+  const stored = Array.isArray(value)
+    ? value.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object'))
+    : []
+  return DEFAULT_SITE_SETTINGS.paymentMethods.map(method => {
+    const saved = stored.find(item => item.id === method.id)
+    const details = normalizePaymentDetails(saved, method)
+    return {
+      ...method,
+      ...details,
+      enabled: typeof saved?.enabled === 'boolean' ? saved.enabled : method.enabled,
+      // Migrate the old single textarea value into the new instructions field.
+      instructions: typeof saved?.instructions === 'string' && saved.instructions.trim()
+        ? saved.instructions
+        : typeof saved?.details === 'string' && saved.details.trim() ? saved.details : method.instructions,
+      details: typeof saved?.details === 'string' ? saved.details : method.details,
+    }
+  })
+}
 
 
 export function subscribeToSiteSettings(onSuccess: (settings: SiteSettings) => void, onError?: (err: Error) => void) {
@@ -152,10 +203,19 @@ export function subscribeToSiteSettings(onSuccess: (settings: SiteSettings) => v
       const storedSocialLinks = data.socialLinks && typeof data.socialLinks === 'object'
         ? data.socialLinks as Partial<SiteSettings['socialLinks']>
         : {}
+      const storedDeliveryCities = Array.isArray(data.deliveryCities)
+        ? Array.from(new Set(data.deliveryCities
+          .filter((city): city is string => typeof city === 'string')
+          .map(city => city.trim())
+          .filter(Boolean)))
+        : DEFAULT_SITE_SETTINGS.deliveryCities
+      const storedPaymentMethods = normalizePaymentMethods(data.paymentMethods)
       onSuccess({
         ...DEFAULT_SITE_SETTINGS,
         ...data,
-        freeShippingThreshold: Number(data.freeShippingThreshold ?? DEFAULT_SITE_SETTINGS.freeShippingThreshold) || DEFAULT_SITE_SETTINGS.freeShippingThreshold,
+        freeShippingThreshold: getFreeShippingThreshold(data.freeShippingThreshold),
+        deliveryCities: storedDeliveryCities,
+        paymentMethods: storedPaymentMethods,
         ordersEnabled: data.ordersEnabled ?? true,
         usdRate: Number(data.usdRate ?? DEFAULT_SITE_SETTINGS.usdRate) > 0 ? Number(data.usdRate) : DEFAULT_SITE_SETTINGS.usdRate,
         eurRate: Number(data.eurRate ?? DEFAULT_SITE_SETTINGS.eurRate) > 0 ? Number(data.eurRate) : DEFAULT_SITE_SETTINGS.eurRate,
@@ -216,11 +276,11 @@ export function subscribeToProducts(
  */
 export async function addProductToFirestore(product: Omit<Product, 'id'>): Promise<string> {
   const colRef = collection(db, PRODUCTS_COLLECTION)
-  const docRef = await addDoc(colRef, {
+  const docRef = await addDoc(colRef, withoutUndefinedFields({
     ...product,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
-  })
+  }))
   return docRef.id
 }
 
@@ -229,7 +289,7 @@ export async function addProductToFirestore(product: Omit<Product, 'id'>): Promi
  */
 export async function updateProductInFirestore(id: string, updates: Partial<Product>): Promise<void> {
   const docRef = doc(db, PRODUCTS_COLLECTION, id)
-  const cleanUpdates = { ...updates, updatedAt: serverTimestamp() }
+  const cleanUpdates = withDeletedUndefinedFields({ ...updates, updatedAt: serverTimestamp() })
   delete (cleanUpdates as Record<string, unknown>).id
   await updateDoc(docRef, cleanUpdates)
 }
@@ -283,10 +343,10 @@ export function subscribeToCategories(
  */
 export async function addCategoryToFirestore(category: Omit<Category, 'id'>): Promise<string> {
   const colRef = collection(db, CATEGORIES_COLLECTION)
-  const docRef = await addDoc(colRef, {
+  const docRef = await addDoc(colRef, withoutUndefinedFields({
     ...category,
     createdAt: serverTimestamp(),
-  })
+  }))
   return docRef.id
 }
 
@@ -295,7 +355,7 @@ export async function addCategoryToFirestore(category: Omit<Category, 'id'>): Pr
  */
 export async function updateCategoryInFirestore(id: string, updates: Partial<Category>): Promise<void> {
   const docRef = doc(db, CATEGORIES_COLLECTION, id)
-  const cleanUpdates = { ...updates }
+  const cleanUpdates = withDeletedUndefinedFields({ ...updates })
   delete (cleanUpdates as Record<string, unknown>).id
   await updateDoc(docRef, cleanUpdates)
 }
@@ -308,7 +368,80 @@ export async function deleteCategoryFromFirestore(id: string): Promise<void> {
   await deleteDoc(docRef)
 }
 
+/**
+ * Move all products out of a category, then delete the empty category.
+ * The operation is chunked so a large catalog does not exceed Firestore's
+ * 500-operation batch limit. Re-running it is safe after a partial failure.
+ */
+export async function moveProductsToCategoryAndDeleteCategory(
+  sourceCategoryId: string,
+  targetCategoryId: string,
+  targetCategoryName: string
+): Promise<number> {
+  const productQuery = query(
+    collection(db, PRODUCTS_COLLECTION),
+    where('categoryId', '==', sourceCategoryId)
+  )
+  const productSnapshot = await getDocs(productQuery)
+  const productDocs = productSnapshot.docs
+  const batchSize = 450
+
+  for (let start = 0; start < productDocs.length; start += batchSize) {
+    const batch = writeBatch(db)
+    for (const productDoc of productDocs.slice(start, start + batchSize)) {
+      batch.update(productDoc.ref, {
+        categoryId: targetCategoryId,
+        categoryName: targetCategoryName,
+        updatedAt: serverTimestamp(),
+      })
+    }
+    await batch.commit()
+  }
+
+  await deleteDoc(doc(db, CATEGORIES_COLLECTION, sourceCategoryId))
+  return productDocs.length
+}
+
 // ─── FIRESTORE: Orders ────────────────────────────────────────────────────────
+
+function normalizeOrderItems(value: unknown): Order['items'] {
+  if (!Array.isArray(value)) return []
+
+  return value.flatMap(rawItem => {
+    if (!rawItem || typeof rawItem !== 'object') return []
+    const item = rawItem as Record<string, unknown>
+    const price = Number(item.price)
+    const quantity = Number(item.quantity)
+
+    return [{
+      productId: typeof item.productId === 'string' ? item.productId : '',
+      productName: typeof item.productName === 'string' && item.productName.trim() ? item.productName : 'منتج محذوف',
+      price: Number.isFinite(price) ? Math.max(0, price) : 0,
+      quantity: Number.isFinite(quantity) ? Math.max(1, Math.floor(quantity)) : 1,
+      image: typeof item.image === 'string' ? item.image : '',
+    }]
+  })
+}
+
+function isCurrencyCode(value: unknown): value is NonNullable<Order['displayCurrency']> {
+  return value === 'ILS' || value === 'USD' || value === 'EUR'
+}
+
+function isPaymentMethodId(value: unknown): value is PaymentMethodId {
+  return value === 'jawwalpay' || value === 'palpay' || value === 'bank_palestine' || value === 'other'
+}
+
+function normalizeOrderPaymentDetails(value: unknown): PaymentMethodDetails | undefined {
+  if (!value || typeof value !== 'object') return undefined
+  return normalizePaymentDetails(value, {
+    accountName: '',
+    accountNumber: '',
+    iban: '',
+    branch: '',
+    instructions: '',
+    paymentLink: '',
+  })
+}
 
 /**
  * Subscribe to orders in real time
@@ -323,17 +456,50 @@ export function subscribeToOrders(
     (snapshot) => {
       const list: Order[] = snapshot.docs.map((docSnap) => {
         const data = docSnap.data()
+        const items = normalizeOrderItems(data.items)
+        const totalValue = Number(data.total)
+        const total = Number.isFinite(totalValue) ? Math.max(0, totalValue) : 0
+        const storedItemsCount = Number(data.itemsCount)
+        const derivedItemsCount = items.reduce((sum, item) => sum + (item.quantity ?? 1), 0)
+        const itemsCount = Number.isFinite(storedItemsCount) && storedItemsCount > 0
+          ? Math.floor(storedItemsCount)
+          : derivedItemsCount
+        const displayCurrency = isCurrencyCode(data.displayCurrency) ? data.displayCurrency : undefined
+        const displayRate = Number(data.displayRate)
+        const displayTotal = Number(data.displayTotal)
+        const hasCurrencySnapshot = Boolean(
+          displayCurrency
+          && Number.isFinite(displayRate)
+          && displayRate > 0
+          && Number.isFinite(displayTotal)
+          && displayTotal >= 0
+        )
+
         return {
           id: docSnap.id,
-          customer: data.customer || 'عميلة',
-          phone: data.phone || '',
-          email: data.email || '',
-          address: data.address || '',
-          notes: data.notes || '',
-          items: Array.isArray(data.items) ? data.items : [],
-          total: Number(data.total) || 0,
-          itemsCount: Number(data.itemsCount) || 0,
-          status: (data.status as OrderStatus) || 'جديد',
+
+           customer: typeof data.customer === 'string' && data.customer.trim() ? data.customer : 'عميلة',
+          phone: typeof data.phone === 'string' ? data.phone : '',
+          email: typeof data.email === 'string' ? data.email : '',
+          governorate: typeof data.governorate === 'string' ? data.governorate : '',
+          city: typeof data.city === 'string' ? data.city : '',
+          address: typeof data.address === 'string' ? data.address : '',
+          deliveryNotes: typeof data.deliveryNotes === 'string' ? data.deliveryNotes : '',
+          notes: typeof data.notes === 'string' ? data.notes : '',
+          items,
+          total,
+          itemsCount,
+          ...(hasCurrencySnapshot ? { displayCurrency, displayRate, displayTotal } : {}),
+          shippingStatus: data.shippingStatus === 'free' || data.shippingStatus === 'standard' ? data.shippingStatus : undefined,
+          shippingThreshold: Number.isFinite(Number(data.shippingThreshold)) ? Number(data.shippingThreshold) : undefined,
+          paymentStatus: data.paymentStatus === 'paid' ? 'paid' : 'pending',
+           requestedPaymentMethod: isPaymentMethodId(data.requestedPaymentMethod) ? data.requestedPaymentMethod : undefined,
+           paymentMethod: isPaymentMethodId(data.paymentMethod) ? data.paymentMethod : undefined,
+           paymentMethodLabel: typeof data.paymentMethodLabel === 'string' ? data.paymentMethodLabel : undefined,
+           paymentDetails: normalizeOrderPaymentDetails(data.paymentDetails),
+           paymentReference: typeof data.paymentReference === 'string' ? data.paymentReference : undefined,
+           paymentConfirmedAt: typeof data.paymentConfirmedAt === 'string' ? data.paymentConfirmedAt : undefined,
+           status: (data.status as OrderStatus) || 'جديد',
           createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : (data.createdAt || new Date().toISOString()),
         } as Order
       })
@@ -347,15 +513,13 @@ export function subscribeToOrders(
   )
 }
 
-/**
- * Add a new order directly to Firestore
- */
+/** Add a new order directly to Firestore. */
 export async function addOrderToFirestore(order: Omit<Order, 'id'>): Promise<string> {
   const colRef = collection(db, ORDERS_COLLECTION)
-  const docRef = await addDoc(colRef, {
+  const docRef = await addDoc(colRef, withoutUndefinedFields({
     ...order,
     createdAt: serverTimestamp(),
-  })
+  }))
   return docRef.id
 }
 
@@ -369,7 +533,7 @@ export async function updateOrderStatusInFirestore(id: string, status: OrderStat
 
 /** Update the editable details of an existing order. */
 export async function updateOrderInFirestore(id: string, updates: Partial<Order>): Promise<void> {
-  const cleanUpdates = { ...updates }
+  const cleanUpdates = withDeletedUndefinedFields({ ...updates })
   delete (cleanUpdates as Record<string, unknown>).id
   delete (cleanUpdates as Record<string, unknown>).createdAt
   await updateDoc(doc(db, ORDERS_COLLECTION, id), cleanUpdates)

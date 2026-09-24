@@ -20,6 +20,7 @@ import {
   Calendar,
 } from 'lucide-react'
 import type { Product, Order, NewsletterSubscriber } from '../../types'
+import Modal from '../ui/Modal'
 
 interface Props {
   products: Product[]
@@ -375,8 +376,8 @@ export default function AdminOverview({
 
       {/* ── Clear Confirmation Modal ── */}
       {showClearConfirm && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-[#221811]/40 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="bg-white rounded-3xl border border-[#EADBCE] shadow-2xl p-6 sm:p-8 max-w-sm w-full text-center animate-scale-in">
+        <Modal onClose={() => !isProcessing && setShowClearConfirm(false)} size="sm">
+          <div className="bg-white rounded-3xl border border-[#EADBCE] shadow-2xl p-6 sm:p-8 max-w-sm w-full text-center">
             <div className="w-14 h-14 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center mx-auto mb-4">
               <AlertCircle className="w-6 h-6 stroke-[2]" />
             </div>
@@ -401,13 +402,13 @@ export default function AdminOverview({
               </button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* ── Newsletter Subscribers Modal ── */}
       {showSubscribersModal && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-[#221811]/50 backdrop-blur-sm p-0 sm:p-4 animate-fade-in">
-          <div className="bg-white rounded-t-3xl sm:rounded-3xl border border-[#EADBCE] shadow-2xl max-w-2xl w-full animate-scale-in overflow-hidden max-h-[90vh] flex flex-col">
+        <Modal onClose={() => setShowSubscribersModal(false)} size="lg" className="overflow-hidden p-0">
+          <div className="bg-white rounded-2xl sm:rounded-3xl border border-[#EADBCE] shadow-2xl max-w-4xl w-full mx-auto max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
 
             {/* Header */}
             <div className="bg-[#FAF7F2] p-5 sm:p-6 border-b border-[#EADBCE] flex items-center justify-between shrink-0">
@@ -461,9 +462,9 @@ export default function AdminOverview({
             </div>
 
             {/* Subscribers List */}
-            <div className="overflow-y-auto flex-1 divide-y divide-[#FAF7F2]">
+            <div className="overflow-y-auto flex-1 lg:grid lg:grid-cols-2 lg:content-start">
               {subscribers.length === 0 ? (
-                <div className="p-12 text-center">
+                <div className="p-12 text-center lg:col-span-2">
                   <div className="w-12 h-12 rounded-2xl bg-[#FAF7F2] text-[#8D6527] flex items-center justify-center mx-auto mb-3">
                     <Mail className="w-6 h-6 stroke-[1.5]" />
                   </div>
@@ -474,7 +475,7 @@ export default function AdminOverview({
                 subscribers.map((sub, index) => (
                   <div
                     key={sub.id || index}
-                    className="p-4 hover:bg-[#FAF7F2]/60 transition-colors flex items-center justify-between gap-3"
+                    className="p-4 border-b border-[#FAF7F2] hover:bg-[#FAF7F2]/60 transition-colors flex items-center justify-between gap-3 min-w-0 lg:odd:border-l"
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <span className="w-6 text-center text-xs font-semibold text-[#968B7E] shrink-0">{index + 1}</span>
@@ -516,7 +517,7 @@ export default function AdminOverview({
               </button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
     </div>

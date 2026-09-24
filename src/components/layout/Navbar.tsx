@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import type { CartItem, SiteSettings } from '../../types'
 import { useCurrency } from '../../context/CurrencyContext'
+import { getFreeShippingStatus } from '../../utils/commerce'
 
 interface Props {
   cartCount: number
@@ -66,10 +67,12 @@ export default function Navbar({
     }
   }
 
-  const freeShippingLimit = Number(settings?.freeShippingThreshold ?? 350) || 350
+  const {
+    threshold: freeShippingLimit,
+    remaining: remainingForFreeShipping,
+    progress: freeShippingProgress,
+  } = getFreeShippingStatus(cartTotal, settings?.freeShippingThreshold)
   const ordersEnabled = settings?.ordersEnabled !== false
-  const freeShippingProgress = freeShippingLimit > 0 ? Math.min(100, Math.round((cartTotal / freeShippingLimit) * 100)) : 100
-  const remainingForFreeShipping = Math.max(0, freeShippingLimit - cartTotal)
 
   return (
     <>
@@ -196,8 +199,6 @@ export default function Navbar({
             <MobileNavLink to="/" onClick={() => setMenuOpen(false)}>الرئيسية</MobileNavLink>
             <MobileNavLink to="/categories" onClick={() => setMenuOpen(false)}>الأقسام</MobileNavLink>
             <MobileNavLink to="/products" onClick={() => setMenuOpen(false)}>جميع المنتجات</MobileNavLink>
-            <MobileNavLink to="/#story" onClick={() => setMenuOpen(false)}>قصتنا وحرفيتنا</MobileNavLink>
-
             {/* Mobile Currency Switcher */}
             <div className="pt-3 pb-1 border-t border-[#EADBCE]">
               <span className="text-xs text-[#685D52] font-semibold block mb-2">عملة المتجر:</span>

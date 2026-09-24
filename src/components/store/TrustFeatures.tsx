@@ -1,12 +1,13 @@
 import { Sparkles, Gift, Truck, Headphones } from 'lucide-react'
 import { useCurrency } from '../../context/CurrencyContext'
+import { getFreeShippingThreshold } from '../../utils/commerce'
 
 interface Props {
   freeShippingThreshold?: number
 }
 
 export default function TrustFeatures({ freeShippingThreshold = 350 }: Props) {
-  const threshold = Number(freeShippingThreshold) || 350
+  const threshold = getFreeShippingThreshold(freeShippingThreshold)
   const { formatPrice } = useCurrency()
   const features = [
     {

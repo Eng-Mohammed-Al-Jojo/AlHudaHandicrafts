@@ -23,7 +23,7 @@ service cloud.firestore {
     }
 
     match /orders/{orderId} {
-      // Visitors can only submit a minimally valid new order.
+      // Visitors can submit a valid order directly from Checkout.
       allow create: if request.resource.data.customer is string
                     && request.resource.data.phone is string
                     && request.resource.data.total is number;

@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
-import type { CurrencyCode, SiteSettings } from '../types'
+import { DEFAULT_SITE_SETTINGS, type CurrencyCode, type SiteSettings } from '../types'
 
 export type CurrencyInfo = {
   code: CurrencyCode
@@ -59,19 +59,20 @@ export function CurrencyProvider({ children, settings }: Props) {
     }
   }
 
-  const usdRate = Number(settings.usdRate) > 0 ? Number(settings.usdRate) : 3.65
-  const eurRate = Number(settings.eurRate) > 0 ? Number(settings.eurRate) : 3.95
+  const usdRate = Number(settings.usdRate) > 0 ? Number(settings.usdRate) : DEFAULT_SITE_SETTINGS.usdRate
+  const eurRate = Number(settings.eurRate) > 0 ? Number(settings.eurRate) : DEFAULT_SITE_SETTINGS.eurRate
 
   function convertPrice(ilsPrice: number, targetCurrency: CurrencyCode = currency): number {
+    const basePrice = Number.isFinite(ilsPrice) ? ilsPrice : 0
     if (targetCurrency === 'USD') {
-      const converted = ilsPrice / usdRate
+      const converted = basePrice / usdRate
       return Math.round(converted * 100) / 100
     }
     if (targetCurrency === 'EUR') {
-      const converted = ilsPrice / eurRate
+      const converted = basePrice / eurRate
       return Math.round(converted * 100) / 100
     }
-    return ilsPrice
+    return basePrice
   }
 
   function formatNumber(ilsPrice: number, targetCurrency: CurrencyCode = currency): number {
@@ -129,8 +130,8 @@ export function useCurrency(): CurrencyContextType {
       convertPrice: (p: number) => p,
       formatPrice: (p: number) => `${p} ₪`,
       formatNumber: (p: number) => p,
-      usdRate: 3.65,
-      eurRate: 3.95,
+      usdRate: DEFAULT_SITE_SETTINGS.usdRate,
+      eurRate: DEFAULT_SITE_SETTINGS.eurRate,
       currentRate: 1,
       availableCurrencies: Object.values(CURRENCY_CONFIG),
     }

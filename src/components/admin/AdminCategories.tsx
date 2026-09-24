@@ -1,14 +1,17 @@
 import { useState, useRef, type ChangeEvent, type FormEvent } from 'react'
 import { Plus, Edit3, Trash2, Layers, Sparkles, X, AlertCircle, Upload, Link as LinkIcon, Image as ImageIcon, Loader2 } from 'lucide-react'
-import type { Category, FirebaseUser } from '../../types'
+import type { Category, FirebaseUser, Product } from '../../types'
 import { uploadCategoryImage } from '../../firebase'
+import Modal from '../ui/Modal'
 
 interface Props {
   categories: Category[]
+  products: Product[]
   user?: FirebaseUser
-  onAdd: (c: Category) => void
-  onUpdate: (c: Category) => void
-  onDelete: (id: string) => void
+  onAdd: (c: Category) => Promise<void>
+  onUpdate: (c: Category) => Promise<void>
+  onDelete: (id: string) => Promise<void>
+  onMoveAndDelete: (sourceId: string, targetId: string) => Promise<void>
   notify: (msg: string, type?: 'success' | 'error') => void
 }
 
@@ -21,11 +24,13 @@ const EMPTY_CAT: Omit<Category, 'id'> = {
   order: 1,
 }
 
-export default function AdminCategories({ categories, user, onAdd, onUpdate, onDelete, notify }: Props) {
+export default function AdminCategories({ categories, products, user, onAdd, onUpdate, onDelete, onMoveAndDelete, notify }: Props) {
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing] = useState<Category | null>(null)
   const [draft, setDraft] = useState(EMPTY_CAT)
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [moveTargetId, setMoveTargetId] = useState('')
 
   // Image Upload States
   const [imageMode, setImageMode] = useState<'upload' | 'url'>('upload')
@@ -59,6 +64,14 @@ export default function AdminCategories({ categories, user, onAdd, onUpdate, onD
     setShowModal(true)
   }
 
+  function handleCloseModal() {
+    if (uploading) return
+    setShowModal(false)
+    setEditing(null)
+    setPendingImageFile(null)
+    setPreviewUrl('')
+  }
+
   function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -84,6 +97,7 @@ export default function AdminCategories({ categories, user, onAdd, onUpdate, onD
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
+    if (uploading) return
     if (!draft.name.trim()) {
       notify('الرجاء كتابة اسم القسم', 'error')
       return
@@ -91,56 +105,95 @@ export default function AdminCategories({ categories, user, onAdd, onUpdate, onD
 
     const slug = draft.slug.trim() || draft.name.trim().toLowerCase().replace(/\s+/g, '-')
     let finalImageUrl = draft.imageUrl?.trim() || ''
+    setUploading(true)
 
-    // Upload from device if pending file exists
-    if (pendingImageFile) {
-      if (!user?.idToken) {
-        notify('يتطلب رفع الصورة من الجهاز تسجيل الدخول كمسؤول في فايربيس', 'error')
-        return
+    try {
+      if (pendingImageFile) {
+        if (!user?.idToken) {
+          notify('يتطلب رفع الصورة من الجهاز تسجيل الدخول كمسؤول في فايربيس', 'error')
+          return
+        }
+        try {
+          finalImageUrl = await uploadCategoryImage(pendingImageFile, user.idToken)
+          setPendingImageFile(null)
+          setDraft(current => ({ ...current, imageUrl: finalImageUrl }))
+          setPreviewUrl(finalImageUrl)
+          if (fileInputRef.current) fileInputRef.current.value = ''
+        } catch (uploadError) {
+          console.error('Category image upload error:', uploadError)
+          const message = uploadError instanceof Error ? uploadError.message : 'فشل رفع الصورة إلى السيرفر'
+          notify(message, 'error')
+          return
+        }
       }
+
       try {
-        setUploading(true)
-        finalImageUrl = await uploadCategoryImage(pendingImageFile, user.idToken)
-      } catch (err: unknown) {
-        console.error('Category image upload error:', err)
-        const errMsg = err instanceof Error ? err.message : 'فشل رفع الصورة إلى السيرفر'
-        notify(errMsg, 'error')
-        setUploading(false)
+        if (editing) {
+          await onUpdate({
+            ...editing,
+            name: draft.name.trim(),
+            slug,
+            description: draft.description?.trim(),
+            imageUrl: finalImageUrl,
+            isVisible: draft.isVisible,
+            order: Number(draft.order),
+          })
+        } else {
+          await onAdd({
+            id: `cat-${Date.now()}`,
+            name: draft.name.trim(),
+            slug,
+            description: draft.description?.trim(),
+            imageUrl: finalImageUrl,
+            isVisible: draft.isVisible,
+            order: Number(draft.order),
+            createdAt: new Date().toISOString(),
+          })
+        }
+      } catch (saveError) {
+        console.error('Category save error:', saveError)
         return
-      } finally {
-        setUploading(false)
       }
-    }
 
-    if (editing) {
-      onUpdate({
-        ...editing,
-        name: draft.name.trim(),
-        slug,
-        description: draft.description?.trim(),
-        imageUrl: finalImageUrl,
-        isVisible: draft.isVisible,
-        order: Number(draft.order),
-      })
-    } else {
-      const newCat: Category = {
-        id: `cat-${Date.now()}`,
-        name: draft.name.trim(),
-        slug,
-        description: draft.description?.trim(),
-        imageUrl: finalImageUrl,
-        isVisible: draft.isVisible,
-        order: Number(draft.order),
-        createdAt: new Date().toISOString(),
-      }
-      onAdd(newCat)
+      setShowModal(false)
+      setEditing(null)
+      setPendingImageFile(null)
+      setPreviewUrl('')
+    } finally {
+      setUploading(false)
     }
-
-    setShowModal(false)
-    setEditing(null)
-    setPendingImageFile(null)
-    setPreviewUrl('')
   }
+
+  function openDeleteDialog(id: string) {
+    setDeleteId(id)
+    setMoveTargetId(categories.find(category => category.id !== id)?.id ?? '')
+  }
+
+  async function confirmDelete() {
+    if (!deleteId || isDeleting) return
+    setIsDeleting(true)
+    try {
+      if (linkedProducts.length > 0) {
+        if (!moveTargetId) {
+          notify('اختاري قسماً بديلاً أولاً لنقل المنتجات.', 'error')
+          return
+        }
+        await onMoveAndDelete(deleteId, moveTargetId)
+      } else {
+        await onDelete(deleteId)
+      }
+      setDeleteId(null)
+      setMoveTargetId('')
+    } catch {
+      // Parent shows the Firestore error and keeps the category unchanged.
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  const categoryToDelete = categories.find(category => category.id === deleteId)
+  const linkedProducts = deleteId ? products.filter(product => product.categoryId === deleteId) : []
+  const targetCategories = deleteId ? categories.filter(category => category.id !== deleteId) : []
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto animate-fade-in">
@@ -171,7 +224,7 @@ export default function AdminCategories({ categories, user, onAdd, onUpdate, onD
 
       {/* Categories Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {categories.sort((a, b) => a.order - b.order).map(cat => (
+        {[...categories].sort((a, b) => a.order - b.order).map(cat => (
           <div
             key={cat.id}
             className="bg-white rounded-2xl border border-[#EADBCE] overflow-hidden shadow-xs hover:border-[#DFB76C] transition-all flex flex-col justify-between"
@@ -227,7 +280,7 @@ export default function AdminCategories({ categories, user, onAdd, onUpdate, onD
                   <Edit3 className="w-4 h-4" />
                 </button>
                 <button
-                  onClick={() => setDeleteId(cat.id)}
+                  onClick={() => openDeleteDialog(cat.id)}
                   className="w-8 h-8 rounded-lg border border-[#EADBCE] hover:border-red-300 text-[#685D52] hover:text-red-600 hover:bg-red-50 flex items-center justify-center transition-colors cursor-pointer"
                   title="حذف القسم"
                 >
@@ -242,22 +295,23 @@ export default function AdminCategories({ categories, user, onAdd, onUpdate, onD
 
       {/* Category Modal (Add / Edit) */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#221811]/40 backdrop-blur-xs p-4 animate-fade-in overflow-y-auto">
-          <div className="bg-white rounded-3xl border border-[#EADBCE] shadow-2xl max-w-lg w-full animate-scale-in overflow-hidden my-auto">
+        <Modal onClose={handleCloseModal} size="lg" className="overflow-hidden p-0">
+          <div className="bg-white rounded-3xl border border-[#EADBCE] shadow-2xl max-w-3xl w-full mx-auto overflow-hidden">
             
-            <div className="bg-[#FAF7F2] p-6 border-b border-[#EADBCE] flex items-center justify-between">
+            <div className="bg-[#FAF7F2] p-5 sm:p-6 lg:px-8 border-b border-[#EADBCE] flex items-center justify-between">
               <h3 className="font-serif text-xl font-bold text-[#221811] m-0" style={{ fontFamily: 'Amiri, serif' }}>
                 {editing ? 'تعديل بيانات القسم' : 'إضافة قسم جديد'}
               </h3>
               <button
-                onClick={() => setShowModal(false)}
-                className="w-8 h-8 rounded-xl border border-[#EADBCE] flex items-center justify-center text-[#685D52] hover:bg-white hover:text-[#221811] cursor-pointer"
+                onClick={handleCloseModal}
+                disabled={uploading}
+                className="w-8 h-8 rounded-xl border border-[#EADBCE] flex items-center justify-center text-[#685D52] hover:bg-white hover:text-[#221811] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+            <form onSubmit={handleSubmit} className="p-5 sm:p-6 lg:p-8 lg:grid lg:grid-cols-2 lg:gap-6 lg:space-y-0 max-h-[80vh] overflow-y-auto">
               <div>
                 <label className="block text-xs font-semibold text-[#221811] mb-1.5">
                   اسم القسم <span className="text-red-500">*</span>
@@ -285,7 +339,7 @@ export default function AdminCategories({ categories, user, onAdd, onUpdate, onD
               </div>
 
               {/* ── Image Upload & Selection Area ── */}
-              <div>
+              <div className="lg:col-span-2">
                 <div className="flex items-center justify-between mb-2">
                   <label className="block text-xs font-semibold text-[#221811]">
                     صورة القسم
@@ -417,7 +471,7 @@ export default function AdminCategories({ categories, user, onAdd, onUpdate, onD
                 )}
               </div>
 
-              <div>
+              <div className="lg:col-span-2">
                 <label className="block text-xs font-semibold text-[#221811] mb-1.5">
                   وصف مختصر
                 </label>
@@ -430,7 +484,7 @@ export default function AdminCategories({ categories, user, onAdd, onUpdate, onD
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4 pt-2">
+              <div className="grid grid-cols-2 gap-4 pt-2 lg:col-span-2">
                 <div>
                   <label className="block text-xs font-semibold text-[#221811] mb-1.5">
                     الترتيب
@@ -457,11 +511,11 @@ export default function AdminCategories({ categories, user, onAdd, onUpdate, onD
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-[#EADBCE] flex items-center justify-end gap-3">
+              <div className="pt-4 border-t border-[#EADBCE] flex items-center justify-end gap-3 lg:col-span-2">
                 <button
                   type="button"
                   disabled={uploading}
-                  onClick={() => setShowModal(false)}
+                  onClick={handleCloseModal}
                   className="rounded-xl border border-[#EADBCE] text-xs font-semibold text-[#685D52] hover:bg-[#FAF7F2] px-5 py-2.5 cursor-pointer disabled:opacity-50"
                 >
                   إلغاء
@@ -484,38 +538,69 @@ export default function AdminCategories({ categories, user, onAdd, onUpdate, onD
             </form>
 
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Delete Confirmation */}
       {deleteId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#221811]/40 backdrop-blur-xs p-4 animate-fade-in">
-          <div className="bg-white rounded-3xl border border-[#EADBCE] shadow-2xl p-6 sm:p-8 max-w-sm w-full text-center animate-scale-in">
+        <Modal onClose={() => !isDeleting && setDeleteId(null)} size="sm">
+          <div className="bg-white rounded-3xl border border-[#EADBCE] shadow-2xl p-6 sm:p-8 max-w-sm w-full text-center">
             <div className="w-14 h-14 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center mx-auto mb-4">
               <AlertCircle className="w-6 h-6 stroke-[2]" />
             </div>
             <h3 className="font-serif text-2xl font-bold text-[#221811] m-0 mb-2" style={{ fontFamily: 'Amiri, serif' }}>
-              حذف القسم؟
+              {linkedProducts.length > 0 ? 'القسم يحتوي على منتجات' : 'حذف القسم؟'}
             </h3>
-            <p className="text-xs text-[#685D52] mb-6 leading-relaxed">
-              هل أنتِ متأكدة من حذف هذا القسم؟ يرجى التأكد من عدم وجود منتجات تابعة له أولاً.
-            </p>
-            <div className="flex items-center gap-3">
+            {linkedProducts.length > 0 ? (
+              <>
+                <p className="text-xs text-[#685D52] mb-4 leading-relaxed">
+                  يحتوي «{categoryToDelete?.name}» على {linkedProducts.length} منتج. لا يمكن حذفه قبل نقل المنتجات إلى قسم آخر.
+                </p>
+                <label className="block text-xs font-semibold text-[#221811] text-right mb-1.5">
+                  القسم البديل لنقل المنتجات
+                </label>
+                <select
+                  value={moveTargetId}
+                  onChange={event => setMoveTargetId(event.target.value)}
+                  disabled={isDeleting || targetCategories.length === 0}
+                  className="w-full bg-[#FAF7F2] border border-[#EADBCE] rounded-xl px-3 py-2.5 text-xs text-[#221811] outline-none focus:border-[#8D6527] disabled:opacity-60"
+                >
+                  <option value="">اختاري القسم البديل</option>
+                  {targetCategories.map(category => (
+                    <option key={category.id} value={category.id}>{category.name}</option>
+                  ))}
+                </select>
+                {targetCategories.length === 0 && (
+                  <p className="text-[11px] text-red-700 mt-2 mb-0">أضيفي قسمًا بديلًا أولًا قبل حذف هذا القسم.</p>
+                )}
+              </>
+            ) : (
+              <p className="text-xs text-[#685D52] mb-6 leading-relaxed">
+                هل أنتِ متأكدة من حذف هذا القسم الفارغ؟ لا يمكن التراجع عن هذه العملية.
+              </p>
+            )}
+            <div className="flex items-center gap-3 mt-6">
               <button
-                onClick={() => setDeleteId(null)}
-                className="flex-1 py-2.5 rounded-xl border border-[#EADBCE] text-xs font-semibold text-[#685D52] hover:bg-[#FAF7F2]"
+                onClick={() => { setDeleteId(null); setMoveTargetId('') }}
+                disabled={isDeleting}
+                className="flex-1 py-2.5 rounded-xl border border-[#EADBCE] text-xs font-semibold text-[#685D52] hover:bg-[#FAF7F2] disabled:opacity-50"
               >
                 إلغاء
               </button>
               <button
-                onClick={() => { onDelete(deleteId); setDeleteId(null) }}
-                className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-xs transition-colors"
+                onClick={confirmDelete}
+                disabled={isDeleting || (linkedProducts.length > 0 && !moveTargetId)}
+                className={`flex-1 py-2.5 rounded-xl text-white text-xs font-bold shadow-xs transition-colors disabled:opacity-60 ${linkedProducts.length > 0 ? 'bg-[#8D6527] hover:bg-[#704F1E]' : 'bg-red-600 hover:bg-red-700'}`}
               >
-                تأكيد الحذف
+                {isDeleting
+                  ? 'جارٍ التنفيذ...'
+                  : linkedProducts.length > 0
+                    ? 'نقل المنتجات وحذف القسم'
+                    : 'تأكيد الحذف'}
               </button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
     </div>

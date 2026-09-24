@@ -17,14 +17,15 @@ import {
 } from 'lucide-react'
 import type { Product, Category, FirebaseUser } from '../../types'
 import { uploadProductImage } from '../../firebase'
+import Modal from '../ui/Modal'
 
 interface Props {
   products: Product[]
   categories: Category[]
   user: FirebaseUser
-  onAdd: (p: Product) => void
-  onDelete: (id: string) => void
-  onUpdate: (p: Product) => void
+  onAdd: (p: Product) => Promise<void>
+  onDelete: (id: string) => Promise<void>
+  onUpdate: (p: Product) => Promise<void>
   notify: (msg: string, type?: 'success' | 'error') => void
 }
 
@@ -55,6 +56,7 @@ export default function AdminProducts({
   const [imageUrlInput, setImageUrlInput] = useState('')
   const [uploading, setUploading] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
   const [search, setSearch] = useState('')
 
   function openNewForm() {
@@ -81,6 +83,15 @@ export default function AdminProducts({
     setPendingImages([])
     setImageUrlInput('')
     setShowForm(true)
+  }
+
+  function handleCloseForm() {
+    if (uploading) return
+    setShowForm(false)
+    setEditing(null)
+    setSavedImageUrls([])
+    setPendingImages([])
+    setImageUrlInput('')
   }
 
   function handleImageChange(e: ChangeEvent<HTMLInputElement>) {
@@ -117,6 +128,7 @@ export default function AdminProducts({
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
+    if (uploading) return
     if (!draft.name.trim() || !draft.price || !draft.categoryId) {
       notify('يرجى ملء جميع الحقول الأساسية (الاسم، السعر، والقسم)', 'error')
       return
@@ -125,59 +137,88 @@ export default function AdminProducts({
       notify('يتطلب رفع الصور تسجيل الدخول كمسؤول — يرجى إعادة تسجيل الدخول.', 'error')
       return
     }
+
     const cat = categories.find(c => c.id === draft.categoryId)
+    setUploading(true)
     try {
-      setUploading(true)
-      const uploadedUrls = await Promise.all(
-        pendingImages.map(img => uploadProductImage(img.file, user.idToken))
-      )
+      let uploadedUrls: string[] = []
+      if (pendingImages.length > 0) {
+        try {
+          uploadedUrls = await Promise.all(
+            pendingImages.map(img => uploadProductImage(img.file, user.idToken))
+          )
+          setSavedImageUrls(current => [...current, ...uploadedUrls])
+          setPendingImages([])
+        } catch (uploadError) {
+          console.error('Product image upload error:', uploadError)
+          const message = uploadError instanceof Error ? uploadError.message : 'فشل رفع إحدى الصور'
+          notify(`تعذر حفظ المنتج: ${message}`, 'error')
+          return
+        }
+      }
+
       const images = [...savedImageUrls, ...uploadedUrls].map((url, order) => ({
         url, fileId: '', alt: draft.name, order,
       }))
 
-      if (editing) {
-        onUpdate({
-          ...editing,
-          name: draft.name.trim(),
-          description: draft.description.trim(),
-          price: Number(draft.price),
-          categoryId: draft.categoryId,
-          categoryName: cat?.name ?? '',
-          isAvailable: draft.isAvailable,
-          isPublished: draft.isPublished,
-          badge: draft.badge.trim() || undefined,
-          images: images.length > 0 ? images : editing.images,
-          updatedAt: new Date().toISOString(),
-        })
-      } else {
-        onAdd({
-          id: `prod-${Date.now()}`,
-          name: draft.name.trim(),
-          slug: draft.name.trim().toLowerCase().replace(/\s+/g, '-'),
-          description: draft.description.trim(),
-          price: Number(draft.price),
-          categoryId: draft.categoryId,
-          categoryName: cat?.name ?? '',
-          isAvailable: draft.isAvailable,
-          isPublished: draft.isPublished,
-          badge: draft.badge.trim() || undefined,
-          images: images.length > 0 ? images : [
-            { url: 'https://images.unsplash.com/photo-1595777457583-95e059d581b8?auto=format&fit=crop&w=800&q=80', alt: draft.name, order: 0 },
-          ],
-          createdAt: new Date().toISOString(),
-        })
+      try {
+        if (editing) {
+          await onUpdate({
+            ...editing,
+            name: draft.name.trim(),
+            description: draft.description.trim(),
+            price: Number(draft.price),
+            categoryId: draft.categoryId,
+            categoryName: cat?.name ?? '',
+            isAvailable: draft.isAvailable,
+            isPublished: draft.isPublished,
+            badge: draft.badge.trim() || undefined,
+            images: images.length > 0 ? images : editing.images,
+            updatedAt: new Date().toISOString(),
+          })
+        } else {
+          await onAdd({
+            id: `prod-${Date.now()}`,
+            name: draft.name.trim(),
+            slug: draft.name.trim().toLowerCase().replace(/\s+/g, '-'),
+            description: draft.description.trim(),
+            price: Number(draft.price),
+            categoryId: draft.categoryId,
+            categoryName: cat?.name ?? '',
+            isAvailable: draft.isAvailable,
+            isPublished: draft.isPublished,
+            badge: draft.badge.trim() || undefined,
+            images: images.length > 0 ? images : [
+              { url: 'https://images.unsplash.com/photo-1595777457583-95e059d581b8?auto=format&fit=crop&w=800&q=80', alt: draft.name, order: 0 },
+            ],
+            createdAt: new Date().toISOString(),
+          })
+        }
+      } catch (saveError) {
+        console.error('Product save error:', saveError)
+        return
       }
 
       setShowForm(false)
       setEditing(null)
       setSavedImageUrls([])
       setPendingImages([])
-    } catch (err: unknown) {
-      console.error('Product save/upload error:', err)
-      const errMsg = err instanceof Error ? err.message : 'حدث خطأ غير متوقع'
-      notify(`خطأ: ${errMsg}`, 'error')
+      setImageUrlInput('')
     } finally {
       setUploading(false)
+    }
+  }
+
+  async function confirmDelete() {
+    if (!deleteId || isDeleting) return
+    setIsDeleting(true)
+    try {
+      await onDelete(deleteId)
+      setDeleteId(null)
+    } catch {
+      // Parent shows the Firestore error and keeps the product unchanged.
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -381,8 +422,8 @@ export default function AdminProducts({
 
       {/* ── Add / Edit Modal ── */}
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-[#221811]/40 backdrop-blur-sm p-0 sm:p-4 animate-fade-in">
-          <div className="bg-white rounded-t-3xl sm:rounded-3xl border border-[#EADBCE] shadow-2xl w-full max-w-2xl max-h-[95vh] sm:max-h-[92vh] overflow-hidden flex flex-col animate-scale-in">
+        <Modal onClose={handleCloseForm} size="xl" className="overflow-hidden p-0">
+          <div className="bg-white rounded-2xl sm:rounded-3xl border border-[#EADBCE] shadow-2xl w-full max-w-4xl mx-auto max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
 
             {/* Modal Header */}
             <div className="bg-[#FAF7F2] px-5 py-4 sm:p-6 border-b border-[#EADBCE] flex items-center justify-between shrink-0">
@@ -395,8 +436,9 @@ export default function AdminProducts({
                 </p>
               </div>
               <button
-                onClick={() => setShowForm(false)}
-                className="w-8 h-8 rounded-xl border border-[#EADBCE] flex items-center justify-center text-[#685D52] hover:bg-white hover:text-[#221811] shrink-0"
+                onClick={handleCloseForm}
+                disabled={uploading}
+                className="w-8 h-8 rounded-xl border border-[#EADBCE] flex items-center justify-center text-[#685D52] hover:bg-white hover:text-[#221811] shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -404,9 +446,10 @@ export default function AdminProducts({
 
             {/* Form */}
             <form onSubmit={handleSubmit} className="overflow-y-auto flex-1">
-              <div className="p-5 sm:p-6 space-y-5">
+              <div className="p-5 sm:p-6 lg:p-8">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-6">
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 lg:col-span-7">
                   <div>
                     <label className="block text-xs font-semibold text-[#221811] mb-1.5">
                       اسم المنتج <span className="text-red-500">*</span>
@@ -463,7 +506,7 @@ export default function AdminProducts({
                   </div>
                 </div>
 
-                <div>
+                <div className="lg:col-span-7">
                   <label className="block text-xs font-semibold text-[#221811] mb-1.5">
                     الوصف والمواصفات
                   </label>
@@ -477,7 +520,7 @@ export default function AdminProducts({
                 </div>
 
                 {/* Images Upload Section */}
-                <div className="border border-dashed border-[#C59B4B] bg-[#FAF7F2]/60 rounded-2xl p-4 sm:p-5">
+                <div className="border border-dashed border-[#C59B4B] bg-[#FAF7F2]/60 rounded-2xl p-4 sm:p-5 lg:col-span-5 lg:col-start-8 lg:row-span-2">
                   <label className="block text-xs font-bold text-[#221811] mb-3 flex items-center gap-2">
                     <ImageIcon className="w-4 h-4 text-[#8D6527]" />
                     <span>صور المنتج (حتى 6 صور)</span>
@@ -545,7 +588,7 @@ export default function AdminProducts({
                 </div>
 
                 {/* Status Toggles */}
-                <div className="flex flex-col sm:flex-row gap-3 sm:gap-6 pt-1">
+                <div className="flex flex-col sm:flex-row gap-3 sm:gap-6 pt-1 lg:col-span-7 lg:col-start-1">
                   <label className="flex items-center gap-2 cursor-pointer p-3 sm:p-0 bg-[#FAF7F2] sm:bg-transparent rounded-xl sm:rounded-none">
                     <input
                       type="checkbox"
@@ -566,14 +609,16 @@ export default function AdminProducts({
                     <span className="text-sm font-semibold text-[#221811]">منشور وظاهر للعملاء</span>
                   </label>
                 </div>
+                </div>
               </div>
 
               {/* Submit Footer */}
               <div className="px-5 sm:px-6 pb-5 sm:pb-6 pt-4 border-t border-[#EADBCE] flex items-center gap-3 shrink-0">
                 <button
                   type="button"
-                  onClick={() => setShowForm(false)}
-                  className="flex-1 rounded-xl border border-[#EADBCE] text-sm font-semibold text-[#685D52] hover:bg-[#FAF7F2] py-3 transition-colors"
+                  onClick={handleCloseForm}
+                  disabled={uploading}
+                  className="flex-1 rounded-xl border border-[#EADBCE] text-sm font-semibold text-[#685D52] hover:bg-[#FAF7F2] py-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   إلغاء
                 </button>
@@ -587,13 +632,13 @@ export default function AdminProducts({
               </div>
             </form>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* ── Delete Confirmation Modal ── */}
       {deleteId && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-[#221811]/40 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="bg-white rounded-3xl border border-[#EADBCE] shadow-2xl p-6 sm:p-8 max-w-sm w-full text-center animate-scale-in">
+        <Modal onClose={() => !isDeleting && setDeleteId(null)} size="sm">
+          <div className="bg-white rounded-3xl border border-[#EADBCE] shadow-2xl p-6 sm:p-8 max-w-sm w-full text-center">
             <div className="w-14 h-14 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center mx-auto mb-4">
               <AlertCircle className="w-6 h-6 stroke-[2]" />
             </div>
@@ -606,19 +651,21 @@ export default function AdminProducts({
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setDeleteId(null)}
-                className="flex-1 py-3 rounded-xl border border-[#EADBCE] text-sm font-semibold text-[#685D52] hover:bg-[#FAF7F2] transition-colors"
+                disabled={isDeleting}
+                className="flex-1 py-3 rounded-xl border border-[#EADBCE] text-sm font-semibold text-[#685D52] hover:bg-[#FAF7F2] transition-colors disabled:opacity-50"
               >
                 إلغاء
               </button>
               <button
-                onClick={() => { onDelete(deleteId); setDeleteId(null) }}
-                className="flex-1 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-bold shadow-xs transition-colors"
+                onClick={confirmDelete}
+                disabled={isDeleting}
+                className="flex-1 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-bold shadow-xs transition-colors disabled:opacity-60"
               >
-                نعم، احذف
+                {isDeleting ? 'جارٍ الحذف...' : 'نعم، احذف'}
               </button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
     </div>

@@ -9,7 +9,7 @@ interface Props {
   categories: Category[]
   initialCategory?: string
   initialQuery?: string
-  onAddToCart: (p: Product) => void
+  onAddToCart: (p: Product, quantity?: number) => void
   heading?: string
   subheading?: string
   featured?: boolean

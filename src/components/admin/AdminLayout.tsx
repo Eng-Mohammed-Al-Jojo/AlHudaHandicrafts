@@ -13,6 +13,8 @@ import {
   Calendar,
 } from 'lucide-react'
 import type { FirebaseUser } from '../../types'
+import Modal from '../ui/Modal'
+import AdminNotificationButton from './AdminNotificationButton'
 
 interface Props {
   user: FirebaseUser
@@ -162,11 +164,14 @@ export default function AdminLayout({ user, onLogout, children }: Props) {
             </div>
           </div>
 
-          {/* Connection badge */}
-          <div className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-bold px-2.5 sm:px-3 py-1 rounded-full shadow-xs">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-            <span className="hidden xs:inline">النظام متصل</span>
-            <span className="xs:hidden">متصل</span>
+          {/* Notifications and connection status */}
+          <div className="flex items-center gap-2">
+            <AdminNotificationButton />
+            <div className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-bold px-2.5 sm:px-3 py-1 rounded-full shadow-xs">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+              <span className="hidden xs:inline">النظام متصل</span>
+              <span className="xs:hidden">متصل</span>
+            </div>
           </div>
         </header>
 
@@ -213,8 +218,8 @@ export default function AdminLayout({ user, onLogout, children }: Props) {
           LOGOUT CONFIRMATION DIALOG
          ══════════════════════════════ */}
       {logoutConfirm && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-[#221811]/40 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="bg-white rounded-3xl border border-[#EADBCE] shadow-2xl p-6 sm:p-8 max-w-sm w-full text-center animate-scale-in">
+        <Modal onClose={() => setLogoutConfirm(false)} size="sm">
+          <div className="bg-white rounded-3xl border border-[#EADBCE] shadow-2xl p-6 sm:p-8 max-w-sm w-full text-center">
             <div className="w-14 h-14 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center mx-auto mb-4">
               <LogOut className="w-6 h-6 stroke-[2]" />
             </div>
@@ -239,7 +244,7 @@ export default function AdminLayout({ user, onLogout, children }: Props) {
               </button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
     </div>

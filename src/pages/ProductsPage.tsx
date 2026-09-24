@@ -14,7 +14,9 @@ export default function ProductsPage({ products, categories, onAddToCart }: Prop
   const cat = params.get('category') ?? ''
   const q = params.get('q') ?? ''
 
-  const activeCategoryName = categories.find(c => c.id === cat)?.name
+  const hasActiveCategory = categories.some(category => category.id === cat)
+  const effectiveCategory = hasActiveCategory ? cat : ''
+  const activeCategoryName = categories.find(c => c.id === effectiveCategory)?.name
 
   return (
     <div className="min-h-screen animate-fade-in">
@@ -40,7 +42,7 @@ export default function ProductsPage({ products, categories, onAddToCart }: Prop
       <ProductGrid
         products={products}
         categories={categories}
-        initialCategory={cat}
+        initialCategory={effectiveCategory}
         initialQuery={q}
         onAddToCart={onAddToCart}
         heading={activeCategoryName ? `منتجات ${activeCategoryName}` : 'جميع المعروضات'}

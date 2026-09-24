@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import './index.css'
 
@@ -18,6 +18,7 @@ import {
   addCategoryToFirestore,
   updateCategoryInFirestore,
   deleteCategoryFromFirestore,
+  moveProductsToCategoryAndDeleteCategory,
   addOrderToFirestore,
   updateOrderStatusInFirestore,
   updateOrderInFirestore,
@@ -30,6 +31,9 @@ import { subscribeToSiteSettings, updateSiteSettings, signOutAdmin, observeAdmin
 
 import { useCart } from './hooks/useCart'
 import { useToast } from './hooks/useToast'
+import { getPublicCategories } from './utils/catalog'
+import { getFreeShippingStatus } from './utils/commerce'
+import { notifyNewOrder } from './utils/adminNotifications'
 
 import Navbar from './components/layout/Navbar'
 import Footer from './components/layout/Footer'
@@ -47,7 +51,8 @@ import AdminOrders from './components/admin/AdminOrders'
 import AdminLogin from './components/admin/AdminLogin'
 import AdminSettings from './components/admin/AdminSettings'
 import CheckoutModal from './components/store/CheckoutModal'
-import type { CheckoutCurrencyDetails } from './components/store/CheckoutModal'
+import OrderConfirmationModal from './components/store/OrderConfirmationModal'
+import type { CheckoutCurrencyDetails, CheckoutCustomerDetails } from './components/store/CheckoutModal'
 import { CurrencyProvider } from './context/CurrencyContext'
 
 // React Router does not restore native browser anchor scrolling after a client-side
@@ -78,6 +83,25 @@ function ScrollManager() {
   }, [pathname, search, hash])
 
   return null
+}
+
+function getFirestoreWriteErrorMessage(error: unknown, action: string) {
+  const code = (error as { code?: string } | null)?.code
+  const details = error instanceof Error ? error.message : ''
+  if (code === 'permission-denied') {
+    return `لم يسمح Firebase بـ${action}. تحققي من تسجيل الدخول وصلاحيات الإدارة. لم يتم تغيير أي بيانات.`
+  }
+  if (code === 'unavailable' || code === 'deadline-exceeded') {
+    return `تعذر الاتصال بـFirebase أثناء ${action}. تحققي من الإنترنت ثم أعيدي المحاولة. لم يتم تغيير أي بيانات.`
+  }
+  if (code === 'resource-exhausted') {
+    return `بلغت حدة Firebase أثناء ${action}. انتظري قليلاً ثم أعيدي المحاولة. لم يتم تغيير أي بيانات.`
+  }
+  if (/unsupported field value|undefined/i.test(details)) {
+    return `رفض Firestore قيمة غير مدعومة أثناء ${action}. تم تنظيف القيم الفارغة؛ حدّثي الصفحة ثم أعيدي المحاولة.`
+  }
+  const codeSuffix = code ? ` (رمز Firebase: ${code})` : ''
+  return `تعذر ${action} وحفظه في Firestore${codeSuffix}. لم يتم تغيير أي بيانات.`
 }
 
 // ─── Store Layout ─────────────────────────────────────────────────────────────
@@ -128,14 +152,18 @@ export default function App() {
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [orders, setOrders] = useState<Order[]>([])
+  const [ordersLoaded, setOrdersLoaded] = useState(false)
+  const knownOrderIdsRef = useRef<Set<string> | null>(null)
   const [subscribers, setSubscribers] = useState<NewsletterSubscriber[]>([])
   const [dbConnected, setDbConnected] = useState(false)
   const [isLoadingInitialData, setIsLoadingInitialData] = useState(true)
   const [settings, setSettings] = useState<SiteSettings>(DEFAULT_SITE_SETTINGS)
   const [checkoutOpen, setCheckoutOpen] = useState(false)
+  const [orderConfirmation, setOrderConfirmation] = useState<{ orderId: string } | null>(null)
 
   const cart = useCart()
   const { toasts, show: notify, dismiss } = useToast()
+  const publicCategories = useMemo(() => getPublicCategories(categories, products), [categories, products])
 
   function handleSetAdminUser(user: FirebaseUser | null) {
     setAdminUser(user)
@@ -160,9 +188,21 @@ export default function App() {
     // 1. Products subscription
     const unsubProducts = subscribeToProducts(
       (items) => {
+        const cartSync = cart.syncWithProducts(items)
         setProducts(items)
         setDbConnected(true)
         setIsLoadingInitialData(false)
+
+        const syncMessages: string[] = []
+        if (cartSync.removed.length > 0) {
+          const names = cartSync.removed.slice(0, 2).map(item => `«${item.name}»`).join('، ')
+          syncMessages.push(`أزيلت ${names}${cartSync.removed.length > 2 ? ' ومنتجات أخرى' : ''} لعدم توفرها أو نشرها`)
+        }
+        if (cartSync.priceChanges.length > 0) {
+          const names = cartSync.priceChanges.slice(0, 2).map(item => `«${item.name}»`).join('، ')
+          syncMessages.push(`حُدّثت أسعار ${names}${cartSync.priceChanges.length > 2 ? ' ومنتجات أخرى' : ''}`)
+        }
+        if (syncMessages.length > 0) notify(`تمت مزامنة السلة: ${syncMessages.join('؛ ')}.`, 'info')
       },
       (err) => {
         console.error('Products listener error:', err)
@@ -192,10 +232,23 @@ export default function App() {
 
   // Orders and Subscribers are private. Attach this listener only after the authenticated admin session is ready.
   useEffect(() => {
-    if (!authReady || !adminUser) { setOrders([]); setSubscribers([]); return }
+    if (!authReady || !adminUser) {
+      setOrders([])
+      setOrdersLoaded(false)
+      knownOrderIdsRef.current = null
+      setSubscribers([])
+      return
+    }
     const unsubOrders = subscribeToOrders(
-      setOrders,
-      (err) => { console.error('Orders listener error:', err); notify('تعذر تحميل الطلبات: تحققي من قواعد Firestore.', 'error') }
+      items => {
+        setOrders(items)
+        setOrdersLoaded(true)
+      },
+      (err) => {
+        console.error('Orders listener error:', err)
+        setOrdersLoaded(false)
+        notify('تعذر تحميل الطلبات: تحققي من قواعد Firestore.', 'error')
+      }
     )
     const unsubSubscribers = subscribeToSubscribers(
       setSubscribers,
@@ -210,6 +263,19 @@ export default function App() {
     }
   }, [authReady, adminUser?.email])
 
+  useEffect(() => {
+    if (!authReady || !adminUser || !ordersLoaded) return
+    const currentIds = new Set(orders.map(order => order.id))
+    if (knownOrderIdsRef.current === null) {
+      knownOrderIdsRef.current = currentIds
+      return
+    }
+    orders
+      .filter(order => !knownOrderIdsRef.current?.has(order.id))
+      .forEach(order => notifyNewOrder(order))
+    knownOrderIdsRef.current = currentIds
+  }, [orders, ordersLoaded, authReady, adminUser?.email])
+
   async function handleDeleteSubscriber(id: string) {
     try {
       await deleteSubscriberFromFirestore(id)
@@ -223,63 +289,117 @@ export default function App() {
 
 
   // ─── Cart & Checkout ──────────────────────────────────────────────────────────
-  function handleAddToCart(p: Product) {
-    cart.addItem(p)
-    notify(`تمت إضافة «${p.name}» إلى السلة`)
+  function handleAddToCart(p: Product, quantity = 1) {
+    cart.addItem(p, quantity)
+    notify(quantity > 1 ? `تمت إضافة ${quantity} قطع من «${p.name}» إلى السلة` : `تمت إضافة «${p.name}» إلى السلة`)
   }
 
-  async function handleCheckout(customer: string, phone: string, notes: string, currencyDetails: CheckoutCurrencyDetails) {
+  async function handleCheckout(details: CheckoutCustomerDetails, currencyDetails: CheckoutCurrencyDetails): Promise<boolean> {
     if (settings.ordersEnabled === false) {
       notify('نعتذر، استقبال الطلبات متوقف مؤقتاً في الوقت الحالي.', 'error')
-      return
+      return false
     }
-    if (!cart.items.length) return
+    if (!cart.items.length) {
+      notify('لم تعد هناك منتجات متاحة في السلة. أضيفي المنتجات المطلوبة ثم حاولي مجدداً.', 'error')
+      return false
+    }
 
-    const freeShippingLimit = Number(settings.freeShippingThreshold ?? 350) || 350
-    const isFreeShipping = freeShippingLimit > 0 && cart.total >= freeShippingLimit
+    const selectedPaymentMethod = settings.paymentMethods.find(method => method.id === details.requestedPaymentMethod && method.enabled)
+    if (!selectedPaymentMethod) {
+      notify('طريقة الدفع غير متاحة حالياً. حدّثي صفحة المتجر وحاولي مجدداً.', 'error')
+      return false
+    }
+
+    const { threshold: freeShippingLimit, isFreeShipping } = getFreeShippingStatus(cart.total, settings.freeShippingThreshold)
     const shippingStatusText = isFreeShipping ? 'شحن مجاني (مؤهل للعرض)' : 'شحن عادي'
-
-    const currencyNote = `[عملة العرض: ${currencyDetails.currency} | سعر الصرف المعتمد: 1 ${currencyDetails.currency} = ${currencyDetails.rate} ₪ | الإجمالي المعروض: ${currencyDetails.displayedTotal} | الإجمالي المحفوظ: ${cart.total} ₪]`
     const shippingNote = `[حالة الشحن: ${shippingStatusText} - حد الشحن المجاني: ${freeShippingLimit} ₪]`
-    const orderNotesWithShipping = [notes, shippingNote, currencyNote].filter(Boolean).join('\n')
+    const deliveryNotesWithShipping = [details.deliveryNotes, shippingNote].filter(Boolean).join('\n')
 
     const newOrderData: Omit<Order, 'id'> = {
-      customer,
-      phone,
-      notes: orderNotesWithShipping,
+      customer: details.customer,
+      phone: details.phone,
+      email: details.email,
+      city: details.city,
+      address: details.address,
+      deliveryNotes: deliveryNotesWithShipping,
+      notes: details.notes,
+      requestedPaymentMethod: selectedPaymentMethod.id,
+      paymentStatus: 'pending',
+      paymentMethodLabel: selectedPaymentMethod.label,
+      paymentDetails: {
+        accountName: selectedPaymentMethod.accountName,
+        accountNumber: selectedPaymentMethod.accountNumber,
+        iban: selectedPaymentMethod.iban,
+        branch: selectedPaymentMethod.branch,
+        instructions: selectedPaymentMethod.instructions,
+        paymentLink: selectedPaymentMethod.paymentLink,
+      },
       items: cart.items.map(i => ({
         productId: i.id,
         productName: i.name,
         price: i.price,
+        quantity: i.quantity,
         image: i.images[0]?.url ?? '',
       })),
       total: cart.total,
       itemsCount: cart.count,
+      displayCurrency: currencyDetails.currency,
+      displayRate: currencyDetails.rate,
+      displayTotal: currencyDetails.displayedAmount,
+      shippingStatus: isFreeShipping ? 'free' : 'standard',
+      shippingThreshold: freeShippingLimit,
       status: 'جديد',
       createdAt: new Date().toISOString(),
     }
 
     try {
-      await addOrderToFirestore(newOrderData)
+      const orderId = await addOrderToFirestore(newOrderData)
       const orderItems = [...cart.items]
       const orderTotal = cart.total
       cart.clear()
+      setOrderConfirmation({ orderId })
       if (settings.orderRouting === 'whatsapp' && settings.whatsappNumber) {
-        const lines = orderItems.map(item => `- ${item.name} × ${item.quantity} (${item.price * item.quantity} ₪)`).join('\n')
-        const message = `طلب جديد من متجر ${settings.storeName}\nالاسم: ${customer}\nالجوال: ${phone}\n${lines}\nإجمالي العرض: ${currencyDetails.displayedTotal}\nالإجمالي الأصلي: ${orderTotal} ₪\nسعر الصرف: 1 ${currencyDetails.currency} = ${currencyDetails.rate} ₪\nالشحن: ${shippingStatusText}${notes ? `\nملاحظات: ${notes}` : ''}`
-        window.open(`https://wa.me/${settings.whatsappNumber}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer')
-        notify('تم حفظ الطلب وفتح واتساب لإرساله.')
-      } else notify('تم تسجيل طلبكِ وحفظه في لوحة التحكم بنجاح 🎉')
+        const lines = orderItems
+          .map(item => `- ${item.name} × ${item.quantity} (السعر الأساسي: ${item.price * item.quantity} ₪)`)
+          .join('\n')
+        const message = [
+          `طلب جديد من متجر ${settings.storeName}`,
+          `رقم الطلب: #${orderId.slice(0, 8)}`,
+          `الاسم: ${details.customer}`,
+          `الجوال: ${details.phone}`,
+          ...(details.email ? [`البريد الإلكتروني: ${details.email}`] : []),
+          `المدينة: ${details.city}`,
+          `العنوان: ${details.address}`,
+           `طريقة الدفع المطلوبة: ${selectedPaymentMethod.label}`,
+           ...(selectedPaymentMethod.accountName ? [`اسم صاحب الحساب: ${selectedPaymentMethod.accountName}`] : []),
+           ...(selectedPaymentMethod.accountNumber ? [`رقم التحويل: ${selectedPaymentMethod.accountNumber}`] : []),
+           ...(selectedPaymentMethod.iban ? [`IBAN: ${selectedPaymentMethod.iban}`] : []),
+           ...(selectedPaymentMethod.branch ? [`الفرع: ${selectedPaymentMethod.branch}`] : []),
+          lines,
+          `القيمة التقديرية بعملة العرض: ${currencyDetails.displayedTotal}`,
+          `الإجمالي الأساسي: ${orderTotal} ₪`,
+          `سعر الصرف وقت الطلب: 1 ${currencyDetails.currency} = ${currencyDetails.rate} ₪`,
+          `الشحن: ${shippingStatusText}`,
+          ...(details.deliveryNotes ? [`ملاحظات التوصيل: ${details.deliveryNotes}`] : []),
+          ...(details.notes ? [`تفاصيل التطريز: ${details.notes}`] : []),
+        ].join('\n')
+        const whatsappWindow = window.open(`https://wa.me/${settings.whatsappNumber}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer')
+        notify(whatsappWindow ? `تم حفظ الطلب #${orderId.slice(0, 8)} وفتح واتساب.` : `تم حفظ الطلب #${orderId.slice(0, 8)}. تعذر فتح واتساب تلقائياً؛ يمكنك إرسال التفاصيل يدوياً.`)
+      } else {
+        notify(`تم تسجيل الطلب #${orderId.slice(0, 8)} وحفظه في لوحة التحكم بنجاح 🎉`)
+      }
+      return true
     } catch (err) {
       console.error('Order creation error:', err)
       notify('تعذر حفظ الطلب؛ لم يتم إرسال أي طلب. تحققي من الاتصال وحاولي مجدداً.', 'error')
+      return false
     }
   }
 
   // ─── Admin Firestore CRUD Handlers ────────────────────────────────────────────
 
   // Products
-  async function handleAddProduct(p: Product) {
+  async function handleAddProduct(p: Product): Promise<void> {
     try {
       const { id, ...rest } = p
       const docId = await addProductToFirestore(rest)
@@ -287,37 +407,37 @@ export default function App() {
       notify('تم حفظ المنتج الجديد في قاعدة بيانات Firestore')
     } catch (err) {
       console.error('Add product error:', err)
-      setProducts(prev => [p, ...prev])
-      notify('تمت الإضافة محلياً (تحقق من اتصال الإنترنت)', 'error')
+      notify(getFirestoreWriteErrorMessage(err, 'حفظ المنتج الجديد'), 'error')
+      throw err
     }
   }
 
-  async function handleUpdateProduct(p: Product) {
+  async function handleUpdateProduct(p: Product): Promise<void> {
     try {
       await updateProductInFirestore(p.id, p)
       setProducts(prev => prev.map(x => x.id === p.id ? p : x))
       notify('تم تحديث المنتج في قاعدة البيانات بنجاح')
     } catch (err) {
       console.error('Update product error:', err)
-      setProducts(prev => prev.map(x => x.id === p.id ? p : x))
-      notify('تم تحديث المنتج محلياً', 'error')
+      notify(getFirestoreWriteErrorMessage(err, 'تحديث المنتج'), 'error')
+      throw err
     }
   }
 
-  async function handleDeleteProduct(id: string) {
+  async function handleDeleteProduct(id: string): Promise<void> {
     try {
       await deleteProductFromFirestore(id)
       setProducts(prev => prev.filter(p => p.id !== id))
       notify('تم حذف المنتج من قاعدة البيانات')
     } catch (err) {
       console.error('Delete product error:', err)
-      setProducts(prev => prev.filter(p => p.id !== id))
-      notify('تم حذف المنتج محلياً', 'error')
+      notify(getFirestoreWriteErrorMessage(err, 'حذف المنتج'), 'error')
+      throw err
     }
   }
 
   // Categories
-  async function handleAddCategory(c: Category) {
+  async function handleAddCategory(c: Category): Promise<void> {
     try {
       const { id, ...rest } = c
       const docId = await addCategoryToFirestore(rest)
@@ -325,49 +445,93 @@ export default function App() {
       notify('تمت إضافة القسم إلى قاعدة البيانات')
     } catch (err) {
       console.error('Add category error:', err)
-      setCategories(prev => [...prev, c])
-      notify('تمت الإضافة محلياً', 'error')
+      notify(getFirestoreWriteErrorMessage(err, 'حفظ القسم الجديد'), 'error')
+      throw err
     }
   }
 
-  async function handleUpdateCategory(c: Category) {
+  async function handleUpdateCategory(c: Category): Promise<void> {
     try {
       await updateCategoryInFirestore(c.id, c)
       setCategories(prev => prev.map(x => x.id === c.id ? c : x))
       notify('تم تحديث القسم في قاعدة البيانات')
     } catch (err) {
       console.error('Update category error:', err)
-      setCategories(prev => prev.map(x => x.id === c.id ? c : x))
-      notify('تم التحديث محلياً', 'error')
+      notify(getFirestoreWriteErrorMessage(err, 'تحديث القسم'), 'error')
+      throw err
     }
   }
 
-  async function handleDeleteCategory(id: string) {
+  async function handleDeleteCategory(id: string): Promise<void> {
+    const linkedProductsCount = products.filter(product => product.categoryId === id).length
+    if (linkedProductsCount > 0) {
+      const message = `لا يمكن حذف القسم لوجود ${linkedProductsCount} منتج مرتبط به. انقلي المنتجات إلى قسم آخر أولاً.`
+      notify(message, 'error')
+      throw new Error(message)
+    }
+
     try {
       await deleteCategoryFromFirestore(id)
       setCategories(prev => prev.filter(c => c.id !== id))
       notify('تم حذف القسم من قاعدة البيانات')
     } catch (err) {
       console.error('Delete category error:', err)
-      setCategories(prev => prev.filter(c => c.id !== id))
-      notify('تم الحذف محلياً', 'error')
+      notify(getFirestoreWriteErrorMessage(err, 'حذف القسم'), 'error')
+      throw err
+    }
+  }
+
+  async function handleMoveProductsAndDeleteCategory(sourceCategoryId: string, targetCategoryId: string): Promise<void> {
+    const targetCategory = categories.find(category => category.id === targetCategoryId)
+    if (!targetCategory || targetCategory.id === sourceCategoryId) {
+      const message = 'اختاري قسماً بديلاً صالحاً لنقل المنتجات إليه.'
+      notify(message, 'error')
+      throw new Error(message)
+    }
+
+    try {
+      const movedProductsCount = await moveProductsToCategoryAndDeleteCategory(
+        sourceCategoryId,
+        targetCategory.id,
+        targetCategory.name
+      )
+      setProducts(prev => prev.map(product => product.categoryId === sourceCategoryId
+        ? { ...product, categoryId: targetCategory.id, categoryName: targetCategory.name }
+        : product))
+      setCategories(prev => prev.filter(category => category.id !== sourceCategoryId))
+      notify(`تم نقل ${movedProductsCount} منتج إلى «${targetCategory.name}» ثم حذف القسم بنجاح.`)
+    } catch (err) {
+      console.error('Move products and delete category error:', err)
+      notify(getFirestoreWriteErrorMessage(err, 'نقل المنتجات وحذف القسم'), 'error')
+      throw err
     }
   }
 
   // Orders
-  async function handleUpdateOrderStatus(id: string, status: OrderStatus) {
+  async function handleUpdateOrderStatus(id: string, status: OrderStatus): Promise<void> {
+    const currentOrder = orders.find(order => order.id === id)
+    if (status === 'مكتمل' && currentOrder?.status !== 'مكتمل' && currentOrder?.paymentStatus !== 'paid') {
+      notify('لا يمكن تغيير الطلب إلى «مكتمل» قبل تأكيد الدفع من نافذة الدفع.', 'error')
+      return
+    }
     try {
       await updateOrderStatusInFirestore(id, status)
       setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o))
       notify(`تم تحديث حالة الطلب إلى "${status}" في قاعدة البيانات`)
     } catch (err) {
       console.error('Update order status error:', err)
-      setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o))
-      notify('تم التحديث محلياً', 'error')
+      notify(getFirestoreWriteErrorMessage(err, 'تحديث حالة الطلب'), 'error')
+      throw err
     }
   }
 
   async function handleUpdateOrder(order: Order) {
+    const currentOrder = orders.find(item => item.id === order.id)
+    if (order.status === 'مكتمل' && currentOrder?.status !== 'مكتمل' && order.paymentStatus !== 'paid') {
+      const message = 'يجب تأكيد الدفع قبل تحويل الطلب إلى «مكتمل».'
+      notify(message, 'error')
+      throw new Error(message)
+    }
     try {
       await updateOrderInFirestore(order.id, order)
       setOrders(prev => prev.map(item => item.id === order.id ? order : item))
@@ -439,7 +603,7 @@ export default function App() {
               ) : (
                 <StorePage
                   products={products}
-                  categories={categories}
+                  categories={publicCategories}
                   onAddToCart={handleAddToCart}
                   settings={settings}
                 />
@@ -457,7 +621,7 @@ export default function App() {
             >
               <ProductsPage
                 products={products}
-                categories={categories}
+                categories={publicCategories}
                 onAddToCart={handleAddToCart}
               />
             </StoreLayout>
@@ -471,7 +635,7 @@ export default function App() {
               onCheckout={() => setCheckoutOpen(true)}
               settings={settings}
             >
-              <CategoriesPage categories={categories} />
+              <CategoriesPage categories={publicCategories} />
             </StoreLayout>
           }
         />
@@ -531,10 +695,12 @@ export default function App() {
               <AdminLayout user={adminUser!} onLogout={handleAdminLogout}>
                 <AdminCategories
                   categories={categories}
+                  products={products}
                   user={adminUser!}
                   onAdd={handleAddCategory}
                   onUpdate={handleUpdateCategory}
                   onDelete={handleDeleteCategory}
+                  onMoveAndDelete={handleMoveProductsAndDeleteCategory}
                   notify={(msg, type) => notify(msg, type ?? 'success')}
                 />
               </AdminLayout>
@@ -548,6 +714,7 @@ export default function App() {
               <AdminLayout user={adminUser!} onLogout={handleAdminLogout}>
                 <AdminOrders
                   orders={orders}
+                  settings={settings}
                   onUpdateStatus={handleUpdateOrderStatus}
                   onUpdate={handleUpdateOrder}
                   onDelete={handleDeleteOrder}
@@ -565,6 +732,7 @@ export default function App() {
 
       <ToastContainer toasts={toasts} dismiss={dismiss} />
       {checkoutOpen && <CheckoutModal items={cart.items} total={cart.total} settings={settings} onSubmit={handleCheckout} onClose={() => setCheckoutOpen(false)} />}
+      {orderConfirmation && <OrderConfirmationModal orderId={orderConfirmation.orderId} whatsappNumber={settings.whatsappNumber} storeName={settings.storeName} onClose={() => setOrderConfirmation(null)} />}
     </BrowserRouter>
     </CurrencyProvider>
   )

@@ -7,7 +7,7 @@ interface Props {
 }
 
 export default function CategoryGrid({ categories }: Props) {
-  const visible = categories.filter(c => c.isVisible).sort((a, b) => a.order - b.order)
+  const visible = [...categories].filter(c => c.isVisible).sort((a, b) => a.order - b.order)
 
   return (
     <section className="py-20 bg-white" id="categories">
