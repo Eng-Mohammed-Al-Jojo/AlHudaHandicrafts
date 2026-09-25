@@ -38,6 +38,7 @@ import { notifyNewOrder } from './utils/adminNotifications'
 import Navbar from './components/layout/Navbar'
 import Footer from './components/layout/Footer'
 import ToastContainer from './components/ui/Toast'
+import PWAInstallPrompt from './components/ui/PWAInstallPrompt'
 
 import StorePage from './pages/StorePage'
 import ProductsPage from './pages/ProductsPage'
@@ -154,6 +155,7 @@ export default function App() {
   const [orders, setOrders] = useState<Order[]>([])
   const [ordersLoaded, setOrdersLoaded] = useState(false)
   const knownOrderIdsRef = useRef<Set<string> | null>(null)
+  const [unseenOrdersCount, setUnseenOrdersCount] = useState(0)
   const [subscribers, setSubscribers] = useState<NewsletterSubscriber[]>([])
   const [dbConnected, setDbConnected] = useState(false)
   const [isLoadingInitialData, setIsLoadingInitialData] = useState(true)
@@ -270,9 +272,11 @@ export default function App() {
       knownOrderIdsRef.current = currentIds
       return
     }
-    orders
-      .filter(order => !knownOrderIdsRef.current?.has(order.id))
-      .forEach(order => notifyNewOrder(order))
+    const newOrders = orders.filter(order => !knownOrderIdsRef.current?.has(order.id))
+    newOrders.forEach(order => notifyNewOrder(order))
+    if (newOrders.length > 0) {
+      setUnseenOrdersCount(c => c + newOrders.length)
+    }
     knownOrderIdsRef.current = currentIds
   }, [orders, ordersLoaded, authReady, adminUser?.email])
 
@@ -651,7 +655,7 @@ export default function App() {
           path="/admin"
           element={
             <AdminGuard user={adminUser} ready={authReady}>
-              <AdminLayout user={adminUser!} onLogout={handleAdminLogout}>
+              <AdminLayout user={adminUser!} onLogout={handleAdminLogout} unseenOrdersCount={unseenOrdersCount}>
                 <AdminOverview
                   products={products}
                   orders={orders}
@@ -674,7 +678,7 @@ export default function App() {
           path="/admin/products"
           element={
             <AdminGuard user={adminUser} ready={authReady}>
-              <AdminLayout user={adminUser!} onLogout={handleAdminLogout}>
+              <AdminLayout user={adminUser!} onLogout={handleAdminLogout} unseenOrdersCount={unseenOrdersCount}>
                 <AdminProducts
                   products={products}
                   categories={categories}
@@ -692,7 +696,7 @@ export default function App() {
           path="/admin/categories"
           element={
             <AdminGuard user={adminUser} ready={authReady}>
-              <AdminLayout user={adminUser!} onLogout={handleAdminLogout}>
+              <AdminLayout user={adminUser!} onLogout={handleAdminLogout} unseenOrdersCount={unseenOrdersCount}>
                 <AdminCategories
                   categories={categories}
                   products={products}
@@ -711,7 +715,7 @@ export default function App() {
           path="/admin/orders"
           element={
             <AdminGuard user={adminUser} ready={authReady}>
-              <AdminLayout user={adminUser!} onLogout={handleAdminLogout}>
+              <AdminLayout user={adminUser!} onLogout={handleAdminLogout} unseenOrdersCount={unseenOrdersCount} onClearUnseenOrders={() => setUnseenOrdersCount(0)}>
                 <AdminOrders
                   orders={orders}
                   settings={settings}
@@ -724,13 +728,14 @@ export default function App() {
             </AdminGuard>
           }
         />
-        <Route path="/admin/settings" element={<AdminGuard user={adminUser} ready={authReady}><AdminLayout user={adminUser!} onLogout={handleAdminLogout}><AdminSettings settings={settings} onSave={async next => { await updateSiteSettings(next); setSettings(next) }} notify={(msg, type) => notify(msg, type ?? 'success')} /></AdminLayout></AdminGuard>} />
+        <Route path="/admin/settings" element={<AdminGuard user={adminUser} ready={authReady}><AdminLayout user={adminUser!} onLogout={handleAdminLogout} unseenOrdersCount={unseenOrdersCount}><AdminSettings settings={settings} onSave={async next => { await updateSiteSettings(next); setSettings(next) }} notify={(msg, type) => notify(msg, type ?? 'success')} /></AdminLayout></AdminGuard>} />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 
       <ToastContainer toasts={toasts} dismiss={dismiss} />
+      <PWAInstallPrompt />
       {checkoutOpen && <CheckoutModal items={cart.items} total={cart.total} settings={settings} onSubmit={handleCheckout} onClose={() => setCheckoutOpen(false)} />}
       {orderConfirmation && <OrderConfirmationModal orderId={orderConfirmation.orderId} whatsappNumber={settings.whatsappNumber} storeName={settings.storeName} onClose={() => setOrderConfirmation(null)} />}
     </BrowserRouter>

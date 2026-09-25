@@ -40,15 +40,18 @@ export default function AdminLogin({ onSuccess }: Props) {
       <div className="relative w-full max-w-md animate-scale-in">
         <div className="bg-white rounded-3xl border border-[#EADBCE] p-8 sm:p-10 shadow-xl">
           
-          {/* Brand Monogram */}
+          {/* Brand Logo & Slogan */}
           <div className="text-center mb-8">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#C59B4B] to-[#8D6527] text-white flex items-center justify-center mx-auto mb-3 shadow-md">
-              <span className="font-serif text-3xl font-bold leading-none mt-1" style={{ fontFamily: 'Amiri, serif' }}>هـ</span>
+            <div className="w-20 h-20 rounded-2xl overflow-hidden mx-auto mb-3.5 shadow-md border border-[#EADBCE] p-1 bg-white">
+              <img src="/logo.jpeg" alt="متجر الهدى للتطريز" className="w-full h-full object-cover rounded-xl" />
             </div>
             <h2 className="font-serif text-3xl font-bold text-[#221811] m-0 mb-1" style={{ fontFamily: 'Amiri, serif' }}>
               متجر الهدى للتطريز
             </h2>
-            <span className="text-xs text-[#8D6527] font-semibold tracking-wider">
+            <p className="text-[11px] text-[#8D6527] font-serif italic mb-1" style={{ fontFamily: 'Amiri, serif' }}>
+              «في كل خيط وغرزة .. تكتمل فصول الجمال»
+            </p>
+            <span className="text-[11px] text-[#968B7E] font-medium tracking-wider">
               بوابة تسجيل دخول الإدارة
             </span>
           </div>

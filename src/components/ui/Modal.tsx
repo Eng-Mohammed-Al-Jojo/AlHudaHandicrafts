@@ -8,6 +8,8 @@ interface Props {
   size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl'
   className?: string
   showDefaultClose?: boolean
+  /** When true, removes default overflow-y-auto so the caller can manage header/body/footer layout internally */
+  structured?: boolean
 }
 
 export default function Modal({
@@ -16,6 +18,7 @@ export default function Modal({
   size = 'md',
   className = '',
   showDefaultClose = false,
+  structured = false,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   const onCloseRef = useRef(onClose)
@@ -64,7 +67,7 @@ export default function Modal({
       <div
         ref={ref}
         tabIndex={-1}
-        className={`relative max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] w-full ${maxW} overflow-y-auto overscroll-contain rounded-2xl sm:rounded-3xl bg-white shadow-2xl animate-scale-in outline-none ${className}`}
+        className={`relative max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] w-full ${maxW} ${structured ? 'flex flex-col overflow-hidden' : 'overflow-y-auto overscroll-contain'} rounded-2xl sm:rounded-3xl bg-white shadow-2xl animate-scale-in outline-none ${className}`}
         role="dialog"
         aria-modal="true"
         onClick={e => e.stopPropagation()}

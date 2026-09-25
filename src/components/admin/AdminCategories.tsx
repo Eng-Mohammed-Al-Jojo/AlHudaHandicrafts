@@ -295,51 +295,62 @@ export default function AdminCategories({ categories, products, user, onAdd, onU
 
       {/* Category Modal (Add / Edit) */}
       {showModal && (
-        <Modal onClose={handleCloseModal} size="lg" className="overflow-hidden p-0">
-          <div className="bg-white rounded-3xl border border-[#EADBCE] shadow-2xl max-w-3xl w-full mx-auto overflow-hidden">
+        <Modal onClose={handleCloseModal} size="lg" structured className="p-0 border border-[#EADBCE]">
+          <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
             
-            <div className="bg-[#FAF7F2] p-5 sm:p-6 lg:px-8 border-b border-[#EADBCE] flex items-center justify-between">
-              <h3 className="font-serif text-xl font-bold text-[#221811] m-0" style={{ fontFamily: 'Amiri, serif' }}>
-                {editing ? 'تعديل بيانات القسم' : 'إضافة قسم جديد'}
-              </h3>
+            {/* Modal Header */}
+            <div className="bg-[#FAF7F2] p-5 sm:p-6 lg:px-8 border-b border-[#EADBCE] flex items-center justify-between shrink-0">
+              <div>
+                <h3 className="font-serif text-xl sm:text-2xl font-bold text-[#221811] m-0" style={{ fontFamily: 'Amiri, serif' }}>
+                  {editing ? 'تعديل بيانات القسم' : 'إضافة قسم جديد'}
+                </h3>
+                <p className="text-xs text-[#685D52] m-0 mt-0.5">
+                  تنظيم بيانات القسم، الرابط، والصورة التوضيحية لظهورها في المتجر
+                </p>
+              </div>
               <button
+                type="button"
                 onClick={handleCloseModal}
                 disabled={uploading}
-                className="w-8 h-8 rounded-xl border border-[#EADBCE] flex items-center justify-center text-[#685D52] hover:bg-white hover:text-[#221811] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-9 h-9 rounded-xl border border-[#EADBCE] hover:bg-white text-[#685D52] hover:text-[#221811] flex items-center justify-center transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                aria-label="إغلاق"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-5 sm:p-6 lg:p-8 lg:grid lg:grid-cols-2 lg:gap-6 lg:space-y-0 max-h-[80vh] overflow-y-auto">
-              <div>
-                <label className="block text-xs font-semibold text-[#221811] mb-1.5">
-                  اسم القسم <span className="text-red-500">*</span>
-                </label>
-                <input
-                  required
-                  value={draft.name}
-                  onChange={e => setDraft(d => ({ ...d, name: e.target.value }))}
-                  placeholder="مثلاً: عبايات مطرّزة"
-                  className="w-full bg-[#FAF7F2] border border-[#EADBCE] rounded-xl px-3 py-2.5 text-xs text-[#221811] outline-none focus:border-[#8D6527] focus:bg-white transition-all"
-                />
-              </div>
+            {/* Modal Body */}
+            <div className="p-5 sm:p-7 lg:p-8 overflow-y-auto flex-1 space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                <div>
+                  <label className="block text-xs font-semibold text-[#221811] mb-1.5">
+                    اسم القسم <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    required
+                    value={draft.name}
+                    onChange={e => setDraft(d => ({ ...d, name: e.target.value }))}
+                    placeholder="مثلاً: عبايات مطرّزة"
+                    className="w-full bg-[#FAF7F2] border border-[#EADBCE] rounded-xl px-3.5 py-2.5 text-xs text-[#221811] outline-none focus:border-[#8D6527] focus:bg-white transition-all"
+                  />
+                </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-[#221811] mb-1.5">
-                  الرابط الدائم (Slug)
-                </label>
-                <input
-                  value={draft.slug}
-                  onChange={e => setDraft(d => ({ ...d, slug: e.target.value }))}
-                  placeholder="abayas"
-                  dir="ltr"
-                  className="w-full bg-[#FAF7F2] border border-[#EADBCE] rounded-xl px-3 py-2.5 text-xs text-[#221811] outline-none focus:border-[#8D6527] focus:bg-white transition-all text-left"
-                />
+                <div>
+                  <label className="block text-xs font-semibold text-[#221811] mb-1.5">
+                    الرابط الدائم (Slug)
+                  </label>
+                  <input
+                    value={draft.slug}
+                    onChange={e => setDraft(d => ({ ...d, slug: e.target.value }))}
+                    placeholder="abayas"
+                    dir="ltr"
+                    className="w-full bg-[#FAF7F2] border border-[#EADBCE] rounded-xl px-3.5 py-2.5 text-xs text-[#221811] outline-none focus:border-[#8D6527] focus:bg-white transition-all text-left"
+                  />
+                </div>
               </div>
 
               {/* ── Image Upload & Selection Area ── */}
-              <div className="lg:col-span-2">
+              <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="block text-xs font-semibold text-[#221811]">
                     صورة القسم
@@ -454,7 +465,7 @@ export default function AdminCategories({ categories, products, user, onAdd, onU
                       }}
                       placeholder="https://images.unsplash.com/..."
                       dir="ltr"
-                      className="w-full bg-[#FAF7F2] border border-[#EADBCE] rounded-xl px-3 py-2.5 text-xs text-[#221811] outline-none focus:border-[#8D6527] focus:bg-white transition-all text-left"
+                      className="w-full bg-[#FAF7F2] border border-[#EADBCE] rounded-xl px-3.5 py-2.5 text-xs text-[#221811] outline-none focus:border-[#8D6527] focus:bg-white transition-all text-left"
                     />
                     {draft.imageUrl && (
                       <div className="flex items-center gap-2 pt-1">
@@ -471,7 +482,7 @@ export default function AdminCategories({ categories, products, user, onAdd, onU
                 )}
               </div>
 
-              <div className="lg:col-span-2">
+              <div>
                 <label className="block text-xs font-semibold text-[#221811] mb-1.5">
                   وصف مختصر
                 </label>
@@ -480,71 +491,72 @@ export default function AdminCategories({ categories, products, user, onAdd, onU
                   value={draft.description}
                   onChange={e => setDraft(d => ({ ...d, description: e.target.value }))}
                   placeholder="مجموعة مختارة من التصاميم..."
-                  className="w-full bg-[#FAF7F2] border border-[#EADBCE] rounded-xl px-3 py-2.5 text-xs text-[#221811] outline-none focus:border-[#8D6527] focus:bg-white transition-all resize-none"
+                  className="w-full bg-[#FAF7F2] border border-[#EADBCE] rounded-xl px-3.5 py-2.5 text-xs text-[#221811] outline-none focus:border-[#8D6527] focus:bg-white transition-all resize-none"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4 pt-2 lg:col-span-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
                 <div>
                   <label className="block text-xs font-semibold text-[#221811] mb-1.5">
-                    الترتيب
+                    الترتيب في العرض
                   </label>
                   <input
                     type="number"
                     min="1"
                     value={draft.order}
                     onChange={e => setDraft(d => ({ ...d, order: Number(e.target.value) }))}
-                    className="w-full bg-[#FAF7F2] border border-[#EADBCE] rounded-xl px-3 py-2 text-xs text-[#221811] outline-none focus:border-[#8D6527] focus:bg-white"
+                    className="w-full bg-[#FAF7F2] border border-[#EADBCE] rounded-xl px-3.5 py-2 text-xs text-[#221811] outline-none focus:border-[#8D6527] focus:bg-white"
                   />
                 </div>
 
-                <div className="flex items-center pt-5">
-                  <label className="flex items-center gap-2 cursor-pointer">
+                <div className="flex items-center sm:pt-6">
+                  <label className="flex items-center gap-2 cursor-pointer bg-[#FAF7F2] sm:bg-transparent p-2.5 sm:p-0 rounded-xl sm:rounded-none w-full sm:w-auto">
                     <input
                       type="checkbox"
                       checked={draft.isVisible}
                       onChange={e => setDraft(d => ({ ...d, isVisible: e.target.checked }))}
                       className="w-4 h-4 rounded text-[#8D6527] focus:ring-[#8D6527]"
                     />
-                    <span className="text-xs font-semibold text-[#221811]">ظاهر في المتجر</span>
+                    <span className="text-xs font-semibold text-[#221811]">ظاهر في المتجر للعملاء</span>
                   </label>
                 </div>
               </div>
+            </div>
 
-              <div className="pt-4 border-t border-[#EADBCE] flex items-center justify-end gap-3 lg:col-span-2">
-                <button
-                  type="button"
-                  disabled={uploading}
-                  onClick={handleCloseModal}
-                  className="rounded-xl border border-[#EADBCE] text-xs font-semibold text-[#685D52] hover:bg-[#FAF7F2] px-5 py-2.5 cursor-pointer disabled:opacity-50"
-                >
-                  إلغاء
-                </button>
-                <button
-                  type="submit"
-                  disabled={uploading}
-                  className="rounded-xl bg-[#8D6527] hover:bg-[#704F1E] text-white text-xs font-bold px-7 py-2.5 shadow-sm transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
-                >
-                  {uploading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>جارٍ رفع الصورة والحفظ...</span>
-                    </>
-                  ) : (
-                    <span>{editing ? 'تحديث القسم' : 'إضافة القسم'}</span>
-                  )}
-                </button>
-              </div>
-            </form>
+            {/* Modal Footer */}
+            <div className="p-4 sm:px-8 border-t border-[#EADBCE] bg-[#FAF7F2] flex items-center justify-end gap-3 shrink-0">
+              <button
+                type="button"
+                disabled={uploading}
+                onClick={handleCloseModal}
+                className="rounded-xl border border-[#EADBCE] bg-white text-xs font-semibold text-[#685D52] hover:bg-[#FAF7F2] px-5 py-2.5 cursor-pointer disabled:opacity-50"
+              >
+                إلغاء
+              </button>
+              <button
+                type="submit"
+                disabled={uploading}
+                className="rounded-xl bg-[#8D6527] hover:bg-[#704F1E] text-white text-xs font-bold px-7 py-2.5 shadow-sm transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                {uploading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>جارٍ رفع الصورة والحفظ...</span>
+                  </>
+                ) : (
+                  <span>{editing ? 'حفظ التعديلات' : 'إضافة القسم'}</span>
+                )}
+              </button>
+            </div>
 
-          </div>
+          </form>
         </Modal>
       )}
 
       {/* Delete Confirmation */}
       {deleteId && (
         <Modal onClose={() => !isDeleting && setDeleteId(null)} size="sm">
-          <div className="bg-white rounded-3xl border border-[#EADBCE] shadow-2xl p-6 sm:p-8 max-w-sm w-full text-center">
+          <div className="p-6 sm:p-8 text-center">
             <div className="w-14 h-14 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center mx-auto mb-4">
               <AlertCircle className="w-6 h-6 stroke-[2]" />
             </div>

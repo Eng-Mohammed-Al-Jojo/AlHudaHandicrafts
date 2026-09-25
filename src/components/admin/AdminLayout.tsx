@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard,
@@ -20,6 +20,8 @@ interface Props {
   user: FirebaseUser
   onLogout: () => void
   children: React.ReactNode
+  unseenOrdersCount?: number
+  onClearUnseenOrders?: () => void
 }
 
 const NAV_ITEMS = [
@@ -30,11 +32,18 @@ const NAV_ITEMS = [
   { id: 'settings',   label: 'الإعدادات',   icon: Settings,        to: '/admin/settings' },
 ]
 
-export default function AdminLayout({ user, onLogout, children }: Props) {
+export default function AdminLayout({ user, onLogout, children, unseenOrdersCount = 0, onClearUnseenOrders }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [logoutConfirm, setLogoutConfirm] = useState(false)
   const location = useLocation()
   const currentPath = location.pathname
+
+  // Clear unseen badge when visiting the orders page
+  useEffect(() => {
+    if (currentPath === '/admin/orders' && unseenOrdersCount > 0) {
+      onClearUnseenOrders?.()
+    }
+  }, [currentPath, unseenOrdersCount, onClearUnseenOrders])
 
   const currentDate = new Date().toLocaleDateString('ar-SA', {
     weekday: 'long',
@@ -69,11 +78,11 @@ export default function AdminLayout({ user, onLogout, children }: Props) {
         {/* Brand Header */}
         <div className="p-5 border-b border-[#EADBCE] flex items-center justify-between shrink-0">
           <Link to="/admin" className="flex items-center gap-3 no-underline group" onClick={() => setSidebarOpen(false)}>
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#C59B4B] to-[#8D6527] text-white flex items-center justify-center shadow-sm shrink-0">
-              <span className="font-serif text-xl font-bold leading-none" style={{ fontFamily: 'Amiri, serif' }}>هـ</span>
+            <div className="w-10 h-10 rounded-xl overflow-hidden shadow-xs border border-[#EADBCE] group-hover:border-[#8D6527] transition-all shrink-0 bg-white">
+              <img src="/logo.jpeg" alt="لوحة الهدى" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
             </div>
             <div className="flex flex-col min-w-0">
-              <span className="font-serif text-lg font-bold text-[#221811] leading-none truncate" style={{ fontFamily: 'Amiri, serif' }}>
+              <span className="font-serif text-lg font-bold text-[#221811] leading-none truncate group-hover:text-[#8D6527] transition-colors" style={{ fontFamily: 'Amiri, serif' }}>
                 لوحة الهدى
               </span>
               <span className="text-[10px] tracking-wider text-[#8D6527] font-semibold mt-0.5">
@@ -107,7 +116,14 @@ export default function AdminLayout({ user, onLogout, children }: Props) {
                 }`}
               >
                 <Icon className={`w-5 h-5 shrink-0 ${active ? 'text-white' : 'text-[#8D6527]'}`} />
-                <span>{item.label}</span>
+                <span className="flex-1">{item.label}</span>
+                {item.id === 'orders' && unseenOrdersCount > 0 && (
+                  <span className={`text-[10px] font-black min-w-[20px] h-5 px-1.5 rounded-full flex items-center justify-center animate-pulse shadow-sm ${
+                    active ? 'bg-white text-[#8D6527]' : 'bg-red-500 text-white'
+                  }`}>
+                    {unseenOrdersCount > 99 ? '99+' : unseenOrdersCount}
+                  </span>
+                )}
               </Link>
             )
           })}
@@ -204,6 +220,11 @@ export default function AdminLayout({ user, onLogout, children }: Props) {
                 <Icon className={`w-5 h-5 transition-all ${active ? 'text-[#8D6527]' : 'text-[#968B7E]'}`} />
                 {active && (
                   <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#C59B4B] border-2 border-white" />
+                )}
+                {item.id === 'orders' && !active && unseenOrdersCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-black flex items-center justify-center border-2 border-white animate-bounce shadow-sm">
+                    {unseenOrdersCount > 99 ? '99+' : unseenOrdersCount}
+                  </span>
                 )}
               </div>
               <span className={`text-[10px] font-semibold leading-none ${active ? 'text-[#8D6527]' : 'text-[#968B7E]'}`}>

@@ -422,8 +422,8 @@ export default function AdminProducts({
 
       {/* ── Add / Edit Modal ── */}
       {showForm && (
-        <Modal onClose={handleCloseForm} size="xl" className="overflow-hidden p-0">
-          <div className="bg-white rounded-2xl sm:rounded-3xl border border-[#EADBCE] shadow-2xl w-full max-w-4xl mx-auto max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
+        <Modal onClose={handleCloseForm} size="xl" structured className="p-0 border border-[#EADBCE]">
+          <div className="flex flex-col flex-1 min-h-0">
 
             {/* Modal Header */}
             <div className="bg-[#FAF7F2] px-5 py-4 sm:p-6 border-b border-[#EADBCE] flex items-center justify-between shrink-0">
@@ -445,192 +445,254 @@ export default function AdminProducts({
             </div>
 
             {/* Form */}
-            <form onSubmit={handleSubmit} className="overflow-y-auto flex-1">
-              <div className="p-5 sm:p-6 lg:p-8">
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-6">
+            <form id="product-form" onSubmit={handleSubmit} className="overflow-y-auto flex-1">
+              <div className="p-5 sm:p-6 lg:p-8 space-y-5">
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 lg:col-span-7">
-                  <div>
-                    <label className="block text-xs font-semibold text-[#221811] mb-1.5">
-                      اسم المنتج <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      required
-                      value={draft.name}
-                      onChange={e => setDraft(d => ({ ...d, name: e.target.value }))}
-                      placeholder="مثلاً: عباية ورد الجوري المطرزة"
-                      className="w-full bg-[#FAF7F2] border border-[#EADBCE] rounded-xl px-3 py-2.5 text-sm text-[#221811] outline-none focus:border-[#8D6527] focus:bg-white transition-all"
-                    />
+                {/* ── Row 1: Two columns — Fields (left) | Images (right) ── */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-6">
+
+                  {/* LEFT: All text fields */}
+                  <div className="space-y-4">
+
+                    {/* Name + Category */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-[#221811] mb-1.5">
+                          اسم المنتج <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          required
+                          value={draft.name}
+                          onChange={e => setDraft(d => ({ ...d, name: e.target.value }))}
+                          placeholder="مثلاً: عباية ورد الجوري المطرزة"
+                          className="w-full bg-[#FAF7F2] border border-[#EADBCE] rounded-xl px-3 py-2.5 text-sm text-[#221811] outline-none focus:border-[#8D6527] focus:bg-white transition-all"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-[#221811] mb-1.5">
+                          القسم <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                          value={draft.categoryId}
+                          onChange={e => setDraft(d => ({ ...d, categoryId: e.target.value }))}
+                          className="w-full bg-[#FAF7F2] border border-[#EADBCE] rounded-xl px-3 py-2.5 text-sm text-[#221811] outline-none focus:border-[#8D6527] focus:bg-white transition-all cursor-pointer"
+                        >
+                          {categories.map(c => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Price + Badge */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-[#221811] mb-1.5">
+                          السعر (بالشيكل) <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          required
+                          type="number"
+                          min="1"
+                          value={draft.price}
+                          onChange={e => setDraft(d => ({ ...d, price: e.target.value }))}
+                          placeholder="مثال: 280"
+                          className="w-full bg-[#FAF7F2] border border-[#EADBCE] rounded-xl px-3 py-2.5 text-sm text-[#221811] outline-none focus:border-[#8D6527] focus:bg-white transition-all"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-[#221811] mb-1.5">
+                          شارة التميز <span className="text-[#968B7E] font-normal">(اختياري)</span>
+                        </label>
+                        <input
+                          value={draft.badge}
+                          onChange={e => setDraft(d => ({ ...d, badge: e.target.value }))}
+                          placeholder="مثال: الأكثر طلباً"
+                          className="w-full bg-[#FAF7F2] border border-[#EADBCE] rounded-xl px-3 py-2.5 text-sm text-[#221811] outline-none focus:border-[#8D6527] focus:bg-white transition-all"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Description */}
+                    <div>
+                      <label className="block text-xs font-semibold text-[#221811] mb-1.5">
+                        الوصف والمواصفات
+                      </label>
+                      <textarea
+                        rows={4}
+                        value={draft.description}
+                        onChange={e => setDraft(d => ({ ...d, description: e.target.value }))}
+                        placeholder="نوع القماش، نوع الخيوط، المقاسات، وتعليمات الغسيل..."
+                        className="w-full bg-[#FAF7F2] border border-[#EADBCE] rounded-xl px-3 py-2.5 text-sm text-[#221811] outline-none focus:border-[#8D6527] focus:bg-white transition-all resize-none"
+                      />
+                    </div>
+
+                    {/* Status Toggles */}
+                    <div className="flex flex-col sm:flex-row gap-3 bg-[#FAF7F2] rounded-2xl p-4 border border-[#EADBCE]">
+                      <label className="flex items-center gap-2.5 cursor-pointer flex-1">
+                        <input
+                          type="checkbox"
+                          checked={draft.isAvailable}
+                          onChange={e => setDraft(d => ({ ...d, isAvailable: e.target.checked }))}
+                          className="w-4 h-4 rounded text-[#8D6527] focus:ring-[#8D6527] shrink-0"
+                        />
+                        <div>
+                          <span className="text-xs font-bold text-[#221811] block">متوفر في المخزن</span>
+                          <span className="text-[10px] text-[#968B7E]">قابل للطلب من العملاء</span>
+                        </div>
+                      </label>
+
+                      <div className="w-px bg-[#EADBCE] hidden sm:block" />
+
+                      <label className="flex items-center gap-2.5 cursor-pointer flex-1">
+                        <input
+                          type="checkbox"
+                          checked={draft.isPublished}
+                          onChange={e => setDraft(d => ({ ...d, isPublished: e.target.checked }))}
+                          className="w-4 h-4 rounded text-[#8D6527] focus:ring-[#8D6527] shrink-0"
+                        />
+                        <div>
+                          <span className="text-xs font-bold text-[#221811] block">منشور للعملاء</span>
+                          <span className="text-[10px] text-[#968B7E]">ظاهر في صفحة المتجر</span>
+                        </div>
+                      </label>
+                    </div>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-[#221811] mb-1.5">
-                      القسم <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={draft.categoryId}
-                      onChange={e => setDraft(d => ({ ...d, categoryId: e.target.value }))}
-                      className="w-full bg-[#FAF7F2] border border-[#EADBCE] rounded-xl px-3 py-2.5 text-sm text-[#221811] outline-none focus:border-[#8D6527] focus:bg-white transition-all cursor-pointer"
-                    >
-                      {categories.map(c => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                      ))}
-                    </select>
-                  </div>
+                  {/* RIGHT: Images upload — sticky and full-height */}
+                  <div className="flex flex-col gap-3 rounded-2xl border-2 border-dashed border-[#EADBCE] hover:border-[#C59B4B] bg-[#FAF7F2]/50 p-4 sm:p-5 transition-colors">
 
-                  <div>
-                    <label className="block text-xs font-semibold text-[#221811] mb-1.5">
-                      السعر (بالشيكل) <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      required
-                      type="number"
-                      min="1"
-                      value={draft.price}
-                      onChange={e => setDraft(d => ({ ...d, price: e.target.value }))}
-                      placeholder="مثال: 280"
-                      className="w-full bg-[#FAF7F2] border border-[#EADBCE] rounded-xl px-3 py-2.5 text-sm text-[#221811] outline-none focus:border-[#8D6527] focus:bg-white transition-all"
-                    />
-                  </div>
+                    {/* Section Label */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-[#8D6527]/10 flex items-center justify-center">
+                          <ImageIcon className="w-4 h-4 text-[#8D6527]" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-[#221811] m-0">صور المنتج</p>
+                          <p className="text-[10px] text-[#968B7E] m-0">حتى 6 صور • PNG, JPG, WEBP</p>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#8D6527]/10 text-[#8D6527]">
+                        {savedImageUrls.length + pendingImages.length}/6
+                      </span>
+                    </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-[#221811] mb-1.5">
-                      شارة التميز (اختياري)
-                    </label>
-                    <input
-                      value={draft.badge}
-                      onChange={e => setDraft(d => ({ ...d, badge: e.target.value }))}
-                      placeholder="مثال: الأكثر طلباً، تطريز يدوي"
-                      className="w-full bg-[#FAF7F2] border border-[#EADBCE] rounded-xl px-3 py-2.5 text-sm text-[#221811] outline-none focus:border-[#8D6527] focus:bg-white transition-all"
-                    />
-                  </div>
-                </div>
-
-                <div className="lg:col-span-7">
-                  <label className="block text-xs font-semibold text-[#221811] mb-1.5">
-                    الوصف والمواصفات
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={draft.description}
-                    onChange={e => setDraft(d => ({ ...d, description: e.target.value }))}
-                    placeholder="نوع القماش، نوع الخيوط، المقاسات، وتعليمات الغسيل..."
-                    className="w-full bg-[#FAF7F2] border border-[#EADBCE] rounded-xl px-3 py-2.5 text-sm text-[#221811] outline-none focus:border-[#8D6527] focus:bg-white transition-all resize-none"
-                  />
-                </div>
-
-                {/* Images Upload Section */}
-                <div className="border border-dashed border-[#C59B4B] bg-[#FAF7F2]/60 rounded-2xl p-4 sm:p-5 lg:col-span-5 lg:col-start-8 lg:row-span-2">
-                  <label className="block text-xs font-bold text-[#221811] mb-3 flex items-center gap-2">
-                    <ImageIcon className="w-4 h-4 text-[#8D6527]" />
-                    <span>صور المنتج (حتى 6 صور)</span>
-                  </label>
-
-                  <div className="flex flex-col gap-3 mb-4">
-                    <label className="w-full bg-white border border-[#EADBCE] hover:border-[#8D6527] rounded-xl px-4 py-3 flex items-center justify-center gap-2 text-sm font-semibold text-[#8D6527] cursor-pointer transition-colors shadow-xs">
-                      <Upload className="w-4 h-4" />
+                    {/* Upload Buttons */}
+                    <label className="w-full bg-white border border-[#EADBCE] hover:border-[#8D6527] hover:bg-[#FAF7F2] rounded-xl px-4 py-3 flex items-center justify-center gap-2 text-sm font-semibold text-[#8D6527] cursor-pointer transition-all group shadow-xs">
+                      <Upload className="w-4 h-4 group-hover:scale-110 transition-transform" />
                       <span>اختيار صور من جهازكِ</span>
                       <input type="file" accept="image/*" multiple onChange={handleImageChange} className="hidden" />
                     </label>
 
-                    <div className="flex items-center gap-2 bg-white border border-[#EADBCE] rounded-xl px-3 py-2 shadow-xs">
+                    <div className="flex items-center gap-2 bg-white border border-[#EADBCE] focus-within:border-[#8D6527] rounded-xl px-3 py-2 shadow-xs transition-colors">
                       <LinkIcon className="w-4 h-4 text-[#968B7E] shrink-0" />
                       <input
                         value={imageUrlInput}
                         onChange={e => setImageUrlInput(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addImageUrl() } }}
                         placeholder="أو ألصقي رابط صورة https://..."
                         dir="ltr"
-                        className="border-0 outline-none text-sm text-[#221811] flex-1 bg-transparent"
+                        className="border-0 outline-none text-sm text-[#221811] flex-1 bg-transparent placeholder:text-[#C8B89F]"
                       />
                       <button
                         type="button"
                         onClick={addImageUrl}
-                        className="rounded-lg bg-[#FAF7F2] hover:bg-[#8D6527] hover:text-white text-[#8D6527] px-3 py-1 text-xs font-semibold transition-colors shrink-0"
+                        className="rounded-lg bg-[#FAF7F2] hover:bg-[#8D6527] hover:text-white text-[#8D6527] px-3 py-1 text-xs font-bold transition-colors shrink-0"
                       >
                         إضافة
                       </button>
                     </div>
+
+                    {/* Images Preview Grid */}
+                    {(savedImageUrls.length + pendingImages.length) > 0 ? (
+                      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-[#EADBCE]">
+                        {savedImageUrls.map((url, idx) => (
+                          <div key={`saved-${idx}`} className="relative aspect-square rounded-xl overflow-hidden border border-[#EADBCE] group shadow-xs">
+                            <img src={url} alt="" className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors" />
+                            <button
+                              type="button"
+                              onClick={() => setSavedImageUrls(urls => urls.filter((_, i) => i !== idx))}
+                              className="absolute top-1 left-1 w-6 h-6 rounded-full bg-red-600 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+                              title="حذف الصورة"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                            {idx === 0 && (
+                              <span className="absolute bottom-1 right-1 bg-[#8D6527] text-white text-[8px] font-bold px-1.5 py-0.5 rounded-md">
+                                رئيسية
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                        {pendingImages.map((img, idx) => (
+                          <div key={`pending-${idx}`} className="relative aspect-square rounded-xl overflow-hidden border-2 border-amber-300 group shadow-xs">
+                            <img src={img.preview} alt="" className="w-full h-full object-cover" />
+                            <div className="absolute inset-0 bg-amber-500/10" />
+                            <span className="absolute bottom-1 right-1 bg-amber-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-md">
+                              قيد الرفع
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setPendingImages(imgs => imgs.filter((_, i) => i !== idx))}
+                              className="absolute top-1 left-1 w-6 h-6 rounded-full bg-red-600 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+                              title="حذف الصورة"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
+                        {/* Empty slots */}
+                        {Array.from({ length: Math.max(0, 6 - savedImageUrls.length - pendingImages.length) }).slice(0, 3).map((_, idx) => (
+                          <label key={`empty-${idx}`} className="aspect-square rounded-xl border-2 border-dashed border-[#EADBCE] flex items-center justify-center cursor-pointer hover:border-[#8D6527] hover:bg-white transition-all">
+                            <Plus className="w-5 h-5 text-[#C8B89F] group-hover:text-[#8D6527]" />
+                            <input type="file" accept="image/*" multiple onChange={handleImageChange} className="hidden" />
+                          </label>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="flex-1 flex flex-col items-center justify-center gap-2 py-6 border-t border-[#EADBCE]">
+                        <div className="w-12 h-12 rounded-2xl bg-white border border-[#EADBCE] flex items-center justify-center shadow-xs">
+                          <ImageIcon className="w-6 h-6 text-[#C8B89F]" />
+                        </div>
+                        <p className="text-xs text-[#968B7E] text-center m-0 font-medium">
+                          لم تُضَف أي صور بعد
+                        </p>
+                        <p className="text-[10px] text-[#C8B89F] text-center m-0">
+                          ارفعي صور المنتج لتحسين تجربة العملاء
+                        </p>
+                      </div>
+                    )}
+
                   </div>
-
-                  {(savedImageUrls.length + pendingImages.length) > 0 ? (
-                    <div className="grid grid-cols-3 gap-2 pt-3 border-t border-[#EADBCE]">
-                      {savedImageUrls.map((url, idx) => (
-                        <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-[#EADBCE] group">
-                          <img src={url} alt="" className="w-full h-full object-cover" />
-                          <button
-                            type="button"
-                            onClick={() => setSavedImageUrls(urls => urls.filter((_, i) => i !== idx))}
-                            className="absolute inset-0 bg-red-600/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ))}
-                      {pendingImages.map((img, idx) => (
-                        <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-[#C59B4B] group">
-                          <img src={img.preview} alt="" className="w-full h-full object-cover" />
-                          <span className="absolute bottom-1 right-1 bg-amber-500 text-white text-[8px] px-1 rounded">قيد الرفع</span>
-                          <button
-                            type="button"
-                            onClick={() => setPendingImages(imgs => imgs.filter((_, i) => i !== idx))}
-                            className="absolute inset-0 bg-red-600/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-[11px] text-[#968B7E] m-0 text-center">
-                      لم تتم إضافة أي صور بعد. يمكنكِ رفع صور متعددة.
-                    </p>
-                  )}
                 </div>
 
-                {/* Status Toggles */}
-                <div className="flex flex-col sm:flex-row gap-3 sm:gap-6 pt-1 lg:col-span-7 lg:col-start-1">
-                  <label className="flex items-center gap-2 cursor-pointer p-3 sm:p-0 bg-[#FAF7F2] sm:bg-transparent rounded-xl sm:rounded-none">
-                    <input
-                      type="checkbox"
-                      checked={draft.isAvailable}
-                      onChange={e => setDraft(d => ({ ...d, isAvailable: e.target.checked }))}
-                      className="w-4 h-4 rounded text-[#8D6527] focus:ring-[#8D6527]"
-                    />
-                    <span className="text-sm font-semibold text-[#221811]">متوفر للطلب في المخزن</span>
-                  </label>
-
-                  <label className="flex items-center gap-2 cursor-pointer p-3 sm:p-0 bg-[#FAF7F2] sm:bg-transparent rounded-xl sm:rounded-none">
-                    <input
-                      type="checkbox"
-                      checked={draft.isPublished}
-                      onChange={e => setDraft(d => ({ ...d, isPublished: e.target.checked }))}
-                      className="w-4 h-4 rounded text-[#8D6527] focus:ring-[#8D6527]"
-                    />
-                    <span className="text-sm font-semibold text-[#221811]">منشور وظاهر للعملاء</span>
-                  </label>
-                </div>
-                </div>
               </div>
 
-              {/* Submit Footer */}
-              <div className="px-5 sm:px-6 pb-5 sm:pb-6 pt-4 border-t border-[#EADBCE] flex items-center gap-3 shrink-0">
-                <button
-                  type="button"
-                  onClick={handleCloseForm}
-                  disabled={uploading}
-                  className="flex-1 rounded-xl border border-[#EADBCE] text-sm font-semibold text-[#685D52] hover:bg-[#FAF7F2] py-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  إلغاء
-                </button>
-                <button
-                  type="submit"
-                  disabled={uploading}
-                  className="flex-1 rounded-xl bg-[#8D6527] hover:bg-[#704F1E] text-white text-sm font-bold py-3 shadow-sm transition-all disabled:opacity-50"
-                >
-                  {uploading ? 'جارٍ الحفظ...' : editing ? 'حفظ التعديلات' : 'إضافة المنتج'}
-                </button>
-              </div>
             </form>
+
+            {/* Submit Footer - fixed outside scrollable area */}
+            <div className="px-5 sm:px-6 pb-5 sm:pb-6 pt-4 border-t border-[#EADBCE] bg-white flex items-center gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={handleCloseForm}
+                disabled={uploading}
+                className="flex-1 rounded-xl border border-[#EADBCE] text-sm font-semibold text-[#685D52] hover:bg-[#FAF7F2] py-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                إلغاء
+              </button>
+              <button
+                type="submit"
+                form="product-form"
+                disabled={uploading}
+                className="flex-1 rounded-xl bg-[#8D6527] hover:bg-[#704F1E] text-white text-sm font-bold py-3 shadow-sm transition-all disabled:opacity-50"
+              >
+                {uploading ? 'جارٍ الحفظ...' : editing ? 'حفظ التعديلات' : 'إضافة المنتج'}
+              </button>
+            </div>
           </div>
         </Modal>
       )}
@@ -638,7 +700,7 @@ export default function AdminProducts({
       {/* ── Delete Confirmation Modal ── */}
       {deleteId && (
         <Modal onClose={() => !isDeleting && setDeleteId(null)} size="sm">
-          <div className="bg-white rounded-3xl border border-[#EADBCE] shadow-2xl p-6 sm:p-8 max-w-sm w-full text-center">
+          <div className="p-6 sm:p-8 text-center">
             <div className="w-14 h-14 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center mx-auto mb-4">
               <AlertCircle className="w-6 h-6 stroke-[2]" />
             </div>

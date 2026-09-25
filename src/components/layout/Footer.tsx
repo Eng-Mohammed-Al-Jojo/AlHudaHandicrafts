@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Phone, Mail, MapPin, MessageCircle, Heart, Sparkles, ShieldCheck, Camera, ThumbsUp, Music2 } from 'lucide-react'
+import { Phone, Mail, MapPin, MessageCircle, Heart, Sparkles, ShieldCheck, Camera, ThumbsUp, Music2, Code2 } from 'lucide-react'
 import type { SiteSettings } from '../../types'
 
 export default function Footer({ settings }: { settings: SiteSettings }) {
@@ -19,26 +19,34 @@ export default function Footer({ settings }: { settings: SiteSettings }) {
           {/* Col 1: Brand & Identity */}
           <div>
             <Link to="/" className="flex items-center gap-3 no-underline text-white mb-5 group">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#C59B4B] to-[#8D6527] text-white flex items-center justify-center shadow-xs">
-                <span className="font-serif text-2xl font-bold leading-none mt-0.5" style={{ fontFamily: 'Amiri, serif' }}>هـ</span>
+              <div className="w-12 h-12 rounded-xl overflow-hidden shadow-sm border border-[#332317] group-hover:border-[#DFB76C] transition-colors shrink-0 bg-white">
+                <img
+                  src="/logo.jpeg"
+                  alt={settings.storeName || 'متجر الهدى'}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                />
               </div>
               <div className="flex flex-col">
-                <span className="font-serif text-2xl font-bold leading-none" style={{ fontFamily: 'Amiri, serif' }}>
+                <span className="font-serif text-2xl font-bold leading-none text-white group-hover:text-[#DFB76C] transition-colors" style={{ fontFamily: 'Amiri, serif' }}>
                   {settings.storeName.replace(' للتطريز', '')}
                 </span>
-                <span className="text-[10px] tracking-[2px] text-[#DFB76C] font-semibold mt-0.5">
-                  للأشغال اليدوية
+                <span className="text-[10px] tracking-[1.5px] text-[#DFB76C] font-semibold mt-0.5">
+                  للمشغولات اليدوية والتطريز
                 </span>
               </div>
             </Link>
 
-            <p className="text-white/60 text-xs sm:text-sm leading-relaxed mb-6">
-              متجر عربي متخصص في تقديم أرقى تصاميم التطريز اليدوي المعاصر، بحرفية أصيلة وخيوط حريرية فاخرة تعانق تفاصيلكِ الأجمل.
+            <p className="text-white/70 text-xs sm:text-sm leading-relaxed mb-3 font-serif italic" style={{ fontFamily: 'Amiri, serif' }}>
+              «في كل خيط وغرزة .. تكتمل فصول الجمال»
+            </p>
+
+            <p className="text-white/50 text-xs leading-relaxed mb-6">
+              متجر متخصص في تقديم أرقى تصاميم التطريز اليدوي المعاصر، بحرفية أصيلة وخيوط حريرية وذهبية فاخرة تعانق تفاصيلكِ الأجمل.
             </p>
 
             <div className="inline-flex items-center gap-2 text-xs text-[#DFB76C]">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>جودة وإتقان يدوم طويلاً</span>
+              <span>جودة وإتقان وحرفية أصيلة</span>
             </div>
           </div>
 
@@ -170,11 +178,13 @@ export default function Footer({ settings }: { settings: SiteSettings }) {
             href="https://wa.me/972592133357"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-white/70 hover:border-emerald-400/60 hover:bg-emerald-400/10 hover:text-emerald-300 no-underline transition-all"
-            aria-label="التواصل مع مطور الموقع، م. محمد الجوجو، عبر واتساب"
+            className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3.5 py-1.5 text-white/70 hover:border-emerald-400/60 hover:bg-emerald-400/10 hover:text-emerald-300 no-underline transition-all group"
+            aria-label="Contact developer Eng. Mohammed El Joujo on WhatsApp"
+            dir="ltr"
           >
-            <MessageCircle className="w-4 h-4 text-emerald-400" />
-            <span className="text-[11px] font-semibold">تطوير م.محمد الجوجو</span>
+            <Code2 className="w-3.5 h-3.5 text-[#DFB76C] group-hover:text-emerald-400 transition-colors" />
+            <span className="text-[11px] font-semibold tracking-wide">Eng. Mohammed El Joujo</span>
+            <MessageCircle className="w-3.5 h-3.5 text-emerald-400 group-hover:scale-110 transition-transform" />
           </a>
         </div>
       </div>

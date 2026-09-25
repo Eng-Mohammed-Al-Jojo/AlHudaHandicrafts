@@ -89,7 +89,7 @@ export function notifyNewOrder(order: Order) {
       new Notification('طلب جديد من متجر الهدى', {
         body: `${order.customer} • ${itemCount} قطعة • ${order.total} ₪`,
         tag: `alhuda-order-${order.id}`,
-        icon: '/icon.svg',
+        icon: '/icon-192.png',
       })
     } catch (error) {
       console.warn('Admin order notification failed:', error)

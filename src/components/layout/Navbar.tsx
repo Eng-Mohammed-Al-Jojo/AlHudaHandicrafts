@@ -106,21 +106,24 @@ export default function Navbar({
               {menuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
 
-            {/* Brand Logo with Monogram Badge */}
+            {/* Brand Logo */}
             <Link
               to="/"
               className="flex items-center gap-3 no-underline group select-none"
               onClick={() => setMenuOpen(false)}
             >
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#C59B4B] to-[#8D6527] text-white flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform">
-                <span className="font-serif text-2xl font-bold leading-none mt-0.5" style={{ fontFamily: 'Amiri, serif' }}>هـ</span>
+              <div className="relative w-11 h-11 rounded-xl overflow-hidden shadow-xs border border-[#EADBCE] group-hover:border-[#C59B4B] group-hover:shadow-md transition-all duration-300 shrink-0 bg-white">
+                <img
+                  src="/logo.jpeg"
+                  alt={settings?.storeName || 'متجر الهدى'}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                />
               </div>
               <div className="flex flex-col">
                 <span className="font-serif text-2xl font-bold leading-none text-[#221811] tracking-tight group-hover:text-[#8D6527] transition-colors" style={{ fontFamily: 'Amiri, serif' }}>
-                  الهدى
-                </span>
-                <span className="text-[10px] tracking-[2px] text-[#C59B4B] font-semibold mt-0.5">
-                  للمشغولات اليدوية
+                  الهدى                </span>
+                <span className="text-[10px] tracking-[1.5px] text-[#C59B4B] font-semibold mt-0.5">
+                  للمشغولات اليدوية والتطريز
                 </span>
               </div>
             </Link>
@@ -160,6 +163,54 @@ export default function Navbar({
                 </button>
               )}
             </form>
+
+            {/* Currency Switcher (Desktop only) */}
+            <div className="hidden lg:block relative" ref={currencyMenuRef}>
+              <button
+                type="button"
+                onClick={() => setCurrencyOpen(v => !v)}
+                className={`flex items-center gap-1.5 rounded-full border px-3 py-2 text-xs font-bold transition-all ${
+                  currencyOpen
+                    ? 'bg-[#8D6527] text-white border-[#8D6527] shadow-sm'
+                    : 'bg-[#FAF7F2] text-[#221811] border-[#EADBCE] hover:border-[#C59B4B] hover:bg-white'
+                }`}
+                aria-label="تغيير العملة"
+                aria-expanded={currencyOpen}
+              >
+                <Coins className="w-3.5 h-3.5" />
+                <span>{currentConfig.symbol}</span>
+                <span>{currentConfig.shortLabel}</span>
+                <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${currencyOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {/* Dropdown */}
+              {currencyOpen && (
+                <div className="absolute left-0 top-full mt-2 w-44 bg-white rounded-2xl border border-[#EADBCE] shadow-xl py-1.5 z-50 animate-scale-in origin-top-left">
+                  <p className="text-[10px] font-semibold text-[#968B7E] uppercase tracking-wider px-3.5 pt-1.5 pb-2">
+                    عملة المتجر
+                  </p>
+                  {availableCurrencies.map(c => (
+                    <button
+                      key={c.code}
+                      type="button"
+                      onClick={() => { setCurrency(c.code); setCurrencyOpen(false) }}
+                      className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs font-semibold transition-colors text-right ${
+                        currency === c.code
+                          ? 'bg-[#FAF7F2] text-[#8D6527]'
+                          : 'text-[#221811] hover:bg-[#FAF7F2]'
+                      }`}
+                    >
+                      <span className="text-base leading-none">{c.symbol}</span>
+                      <span className="flex-1">{c.label ?? c.shortLabel}</span>
+                      {currency === c.code && (
+                        <Check className="w-3.5 h-3.5 text-[#8D6527] shrink-0" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* Cart Button */}
             <button
               onClick={() => setCartOpen(true)}
@@ -212,8 +263,8 @@ export default function Navbar({
                       setMenuOpen(false)
                     }}
                     className={`py-2 px-2.5 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 cursor-pointer ${currency === c.code
-                        ? 'bg-[#8D6527] text-white border-[#8D6527] shadow-xs'
-                        : 'bg-[#FAF7F2] text-[#221811] border-[#EADBCE] hover:border-[#C59B4B]'
+                      ? 'bg-[#8D6527] text-white border-[#8D6527] shadow-xs'
+                      : 'bg-[#FAF7F2] text-[#221811] border-[#EADBCE] hover:border-[#C59B4B]'
                       }`}
                   >
                     <span>{c.symbol}</span>

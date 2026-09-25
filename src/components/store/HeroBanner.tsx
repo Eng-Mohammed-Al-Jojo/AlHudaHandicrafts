@@ -112,13 +112,15 @@ export default function HeroBanner() {
 
                   {/* Bottom Floating Badge */}
                   <div className="absolute bottom-3.5 inset-x-3.5 bg-white/95 backdrop-blur-md rounded-xl p-3 border border-[#DFB76C]/30 shadow-lg flex items-center justify-between text-[#221811]">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-lg bg-[#FAF7F2] text-[#8D6527] flex items-center justify-center font-serif text-sm font-bold border border-[#EADBCE]">
-                        الهدى
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-lg overflow-hidden border border-[#EADBCE] shrink-0 bg-white shadow-xs">
+                        <img src="/logo.jpeg" alt="متجر الهدى" className="w-full h-full object-cover" />
                       </div>
                       <div>
-                        <h4 className="text-xs font-bold m-0 text-[#221811]">أصالة وفخامة</h4>
-                        <span className="text-[10px] text-[#685D52]">صُنِع بحب وإتقان لأجلكِ</span>
+                        <h4 className="text-xs font-bold m-0 text-[#221811]">متجر الهدى للتطريز</h4>
+                        <span className="text-[10px] text-[#8D6527] font-medium font-serif italic" style={{ fontFamily: 'Amiri, serif' }}>
+                          في كل خيط وغرزة .. تكتمل فصول الجمال
+                        </span>
                       </div>
                     </div>
                     <div className="flex items-center gap-1 text-[#8D6527] text-xs font-bold">

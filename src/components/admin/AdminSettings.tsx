@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Settings, Save, Sparkles, MessageCircle, LayoutDashboard, Truck, Phone, Mail, MapPin, Power, CheckCircle2, AlertTriangle, Coins, DollarSign, Euro, Camera, ThumbsUp, Music2, Plus, Trash2 } from 'lucide-react'
+import { Settings, Save, Sparkles, MessageCircle, LayoutDashboard, Truck, Phone, Mail, MapPin, Power, CheckCircle2, AlertTriangle, Coins, DollarSign, Euro, Camera, ThumbsUp, Music2, Plus, Trash2, ArrowUp, ArrowDown, Edit3, Check, X, RotateCcw } from 'lucide-react'
 import { DEFAULT_SITE_SETTINGS, type SiteSettings, type PaymentMethod, type PaymentMethodDetails } from '../../types'
 
 interface Props {
@@ -11,6 +11,8 @@ interface Props {
 export default function AdminSettings({ settings, onSave, notify }: Props) {
   const [draft, setDraft] = useState(settings)
   const [cityInput, setCityInput] = useState('')
+  const [editingCityIndex, setEditingCityIndex] = useState<number | null>(null)
+  const [editingCityValue, setEditingCityValue] = useState('')
   const [saving, setSaving] = useState(false)
 
   useEffect(() => setDraft(settings), [settings])
@@ -29,18 +31,86 @@ export default function AdminSettings({ settings, onSave, notify }: Props) {
   function addDeliveryCity() {
     const city = cityInput.trim()
     if (!city) return
+    if (draft.deliveryCities.some(c => c.toLowerCase() === city.toLowerCase())) {
+      notify(`المدينة "${city}" مضافة بالفعل مسبقاً.`, 'error')
+      return
+    }
     setDraft(current => ({
       ...current,
-      deliveryCities: Array.from(new Set([...current.deliveryCities, city])),
+      deliveryCities: [...current.deliveryCities, city],
     }))
     setCityInput('')
   }
 
-  function removeDeliveryCity(city: string) {
+  function removeDeliveryCity(index: number) {
+    const cityName = draft.deliveryCities[index]
     setDraft(current => ({
       ...current,
-      deliveryCities: current.deliveryCities.filter(item => item !== city),
+      deliveryCities: current.deliveryCities.filter((_, i) => i !== index),
     }))
+    if (editingCityIndex === index) {
+      setEditingCityIndex(null)
+      setEditingCityValue('')
+    }
+    notify(`تم حذف "${cityName}" من مدن التوصيل.`)
+  }
+
+  function startEditingCity(index: number, currentName: string) {
+    setEditingCityIndex(index)
+    setEditingCityValue(currentName)
+  }
+
+  function saveEditingCity(index: number) {
+    const trimmed = editingCityValue.trim()
+    if (!trimmed) {
+      notify('يرجى إدخال اسم المدينة.', 'error')
+      return
+    }
+    const exists = draft.deliveryCities.some((c, i) => i !== index && c.toLowerCase() === trimmed.toLowerCase())
+    if (exists) {
+      notify(`المدينة "${trimmed}" مضافة بالفعل في القائمة.`, 'error')
+      return
+    }
+    setDraft(current => {
+      const list = [...current.deliveryCities]
+      list[index] = trimmed
+      return { ...current, deliveryCities: list }
+    })
+    setEditingCityIndex(null)
+    setEditingCityValue('')
+    notify(`تم تعديل اسم المدينة بنجاح إلى "${trimmed}".`)
+  }
+
+  function cancelEditingCity() {
+    setEditingCityIndex(null)
+    setEditingCityValue('')
+  }
+
+  function moveDeliveryCity(index: number, direction: 'up' | 'down') {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1
+    if (targetIndex < 0 || targetIndex >= draft.deliveryCities.length) return
+    setDraft(current => {
+      const list = [...current.deliveryCities]
+      const temp = list[index]
+      list[index] = list[targetIndex]
+      list[targetIndex] = temp
+      return { ...current, deliveryCities: list }
+    })
+    if (editingCityIndex === index) {
+      setEditingCityIndex(targetIndex)
+    } else if (editingCityIndex === targetIndex) {
+      setEditingCityIndex(index)
+    }
+  }
+
+  function resetDeliveryCitiesToDefault() {
+    setDraft(current => ({
+      ...current,
+      deliveryCities: [...DEFAULT_SITE_SETTINGS.deliveryCities],
+    }))
+    setEditingCityIndex(null)
+    setEditingCityValue('')
+    notify('تمت استعادة قائمة المدن الافتراضية بنجاح.')
   }
 
   async function submit(event: FormEvent) {
@@ -302,31 +372,191 @@ export default function AdminSettings({ settings, onSave, notify }: Props) {
 
         {/* Delivery Cities */}
         <div className="pt-6 border-t border-[#EADBCE]">
-          <div className="flex items-center gap-2 mb-1">
-            <MapPin className="w-5 h-5 text-[#8D6527]" />
-            <h4 className="font-serif text-lg font-bold text-[#221811] m-0" style={{ fontFamily: 'Amiri, serif' }}>
-              مدن التوصيل
-            </h4>
-          </div>
-          <p className="text-xs text-[#685D52] m-0 mb-4">أضيفي المدن التي تريدين عرضها للعميلة في حقل المدينة داخل نافذة الطلب.</p>
-          <div className="flex flex-wrap gap-2 mb-3">
-            {draft.deliveryCities.map(city => (
-              <span key={city} className="inline-flex items-center gap-1.5 rounded-full border border-[#EADBCE] bg-[#FAF7F2] px-3 py-1.5 text-xs text-[#685D52]">
-                {city}
-                <button type="button" onClick={() => removeDeliveryCity(city)} className="text-[#968B7E] hover:text-red-600" aria-label={`حذف ${city}`}><Trash2 className="w-3.5 h-3.5" /></button>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+            <div className="flex items-center gap-2">
+              <MapPin className="w-5 h-5 text-[#8D6527]" />
+              <h4 className="font-serif text-lg font-bold text-[#221811] m-0" style={{ fontFamily: 'Amiri, serif' }}>
+                مدن ومناطق التوصيل
+              </h4>
+              <span className="text-xs bg-[#8D6527]/10 text-[#8D6527] font-semibold px-2.5 py-0.5 rounded-full">
+                {draft.deliveryCities.length} مدينة
               </span>
-            ))}
-            {draft.deliveryCities.length === 0 && <span className="text-xs text-[#968B7E]">لم تُضف مدن بعد.</span>}
+            </div>
+
+            {draft.deliveryCities.length > 0 && (
+              <button
+                type="button"
+                onClick={resetDeliveryCitiesToDefault}
+                className="inline-flex items-center gap-1 text-[11px] text-[#968B7E] hover:text-[#8D6527] transition-colors self-start sm:self-auto cursor-pointer"
+                title="استعادة القائمة الافتراضية"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>استعادة المدن الافتراضية</span>
+              </button>
+            )}
           </div>
-          <div className="flex gap-2">
+
+          <p className="text-xs text-[#685D52] m-0 mb-4">
+            تحكمي في أسماء المدن وترتيب ظهورها للزبونة في نافذة إتمام الطلب (من الأعلى للأسفل). استخدمي الأسهم لتغيير الترتيب، وزر التعديل لتغيير الاسم.
+          </p>
+
+          {/* Add City Input */}
+          <div className="flex gap-2 mb-4">
             <input
               value={cityInput}
               onChange={event => setCityInput(event.target.value)}
-              onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); addDeliveryCity() } }}
-              placeholder="مثال: النصر أو الرمال"
-              className="flex-1 bg-[#FAF7F2] border border-[#EADBCE] rounded-xl px-3.5 py-2.5 text-xs text-[#221811] outline-none focus:border-[#8D6527] focus:bg-white"
+              onKeyDown={event => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  addDeliveryCity()
+                }
+              }}
+              placeholder="اسم مدينة أو منطقة جديدة (مثال: دير البلح — البلد)"
+              className="flex-1 bg-[#FAF7F2] border border-[#EADBCE] rounded-xl px-3.5 py-2.5 text-xs text-[#221811] outline-none focus:border-[#8D6527] focus:bg-white transition-all shadow-inner"
             />
-            <button type="button" onClick={addDeliveryCity} className="inline-flex items-center gap-1.5 rounded-xl bg-[#8D6527] hover:bg-[#704F1E] px-4 py-2.5 text-xs font-bold text-white"><Plus className="w-4 h-4" />إضافة</button>
+            <button
+              type="button"
+              onClick={addDeliveryCity}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-[#8D6527] hover:bg-[#704F1E] active:scale-[0.98] px-4 py-2.5 text-xs font-bold text-white transition-all shadow-sm shrink-0 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>إضافة</span>
+            </button>
+          </div>
+
+          {/* Cities List */}
+          <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+            {draft.deliveryCities.map((city, index) => {
+              const isEditing = editingCityIndex === index
+              const isFirst = index === 0
+              const isLast = index === draft.deliveryCities.length - 1
+
+              return (
+                <div
+                  key={`${city}-${index}`}
+                  className="flex items-center justify-between gap-3 p-2.5 rounded-xl border border-[#EADBCE] bg-[#FAF7F2] hover:bg-white transition-all shadow-xs group"
+                >
+                  <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                    {/* Position Number */}
+                    <span className="w-6 h-6 rounded-lg bg-[#EADBCE]/70 text-[#8D6527] text-[11px] font-bold flex items-center justify-center shrink-0 select-none">
+                      {index + 1}
+                    </span>
+
+                    {/* City Name or Edit Input */}
+                    {isEditing ? (
+                      <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                        <input
+                          type="text"
+                          value={editingCityValue}
+                          onChange={e => setEditingCityValue(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault()
+                              saveEditingCity(index)
+                            } else if (e.key === 'Escape') {
+                              cancelEditingCity()
+                            }
+                          }}
+                          autoFocus
+                          className="w-full bg-white border border-[#8D6527] rounded-lg px-2.5 py-1 text-xs text-[#221811] outline-none shadow-inner"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => saveEditingCity(index)}
+                          className="p-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors cursor-pointer"
+                          title="حفظ التعديل (Enter)"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={cancelEditingCity}
+                          className="p-1 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-700 transition-colors cursor-pointer"
+                          title="إلغاء التعديل (Esc)"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-xs font-medium text-[#221811] truncate">{city}</span>
+                    )}
+                  </div>
+
+                  {/* Actions: Move Up, Move Down, Edit, Delete */}
+                  {!isEditing && (
+                    <div className="flex items-center gap-1 shrink-0">
+                      {/* Move Up */}
+                      <button
+                        type="button"
+                        disabled={isFirst}
+                        onClick={() => moveDeliveryCity(index, 'up')}
+                        className={`p-1.5 rounded-lg border border-transparent transition-all cursor-pointer ${
+                          isFirst
+                            ? 'text-gray-300 cursor-not-allowed'
+                            : 'text-[#685D52] hover:text-[#8D6527] hover:bg-[#EADBCE]/50 active:scale-95'
+                        }`}
+                        title="تحريك لأعلى"
+                        aria-label={`تحريك ${city} لأعلى`}
+                      >
+                        <ArrowUp className="w-3.5 h-3.5" />
+                      </button>
+
+                      {/* Move Down */}
+                      <button
+                        type="button"
+                        disabled={isLast}
+                        onClick={() => moveDeliveryCity(index, 'down')}
+                        className={`p-1.5 rounded-lg border border-transparent transition-all cursor-pointer ${
+                          isLast
+                            ? 'text-gray-300 cursor-not-allowed'
+                            : 'text-[#685D52] hover:text-[#8D6527] hover:bg-[#EADBCE]/50 active:scale-95'
+                        }`}
+                        title="تحريك لأسفل"
+                        aria-label={`تحريك ${city} لأسفل`}
+                      >
+                        <ArrowDown className="w-3.5 h-3.5" />
+                      </button>
+
+                      {/* Edit Button */}
+                      <button
+                        type="button"
+                        onClick={() => startEditingCity(index, city)}
+                        className="p-1.5 rounded-lg text-[#685D52] hover:text-[#8D6527] hover:bg-[#EADBCE]/50 active:scale-95 transition-all cursor-pointer"
+                        title="تعديل اسم المدينة"
+                        aria-label={`تعديل اسم ${city}`}
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </button>
+
+                      {/* Delete Button */}
+                      <button
+                        type="button"
+                        onClick={() => removeDeliveryCity(index)}
+                        className="p-1.5 rounded-lg text-[#968B7E] hover:text-red-600 hover:bg-red-50 active:scale-95 transition-all cursor-pointer"
+                        title="حذف المدينة"
+                        aria-label={`حذف ${city}`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+
+            {draft.deliveryCities.length === 0 && (
+              <div className="text-center py-6 px-4 rounded-xl border border-dashed border-[#EADBCE] bg-[#FAF7F2]">
+                <p className="text-xs text-[#968B7E] mb-2">لم تُضف أي مدن بعد في قائمة التوصيل.</p>
+                <button
+                  type="button"
+                  onClick={resetDeliveryCitiesToDefault}
+                  className="inline-flex items-center gap-1.5 text-xs text-[#8D6527] hover:underline font-semibold cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>استعادة المدن الافتراضية</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
 

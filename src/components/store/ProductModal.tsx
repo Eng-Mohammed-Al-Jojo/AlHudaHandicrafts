@@ -146,9 +146,9 @@ export default function ProductModal({ product, onAddToCart, onClose }: Props) {
           <div className="flex items-center justify-between gap-3 mb-5">
             <div className="flex items-center gap-2.5 min-w-0">
               <img
-                src="/icon.svg"
+                src="/logo.jpeg"
                 alt="شعار متجر الهدى"
-                className="w-10 h-10 rounded-xl border border-[#C59B4B]/40 bg-[#FAF7F2] object-cover shrink-0"
+                className="w-10 h-10 rounded-xl border border-[#C59B4B]/40 bg-white object-cover shrink-0 shadow-xs"
               />
               <div className="min-w-0">
                 <p className="text-xs font-bold text-[#8D6527] m-0 truncate">متجر الهدى للتطريز</p>
