@@ -6,7 +6,6 @@ import {
   Layers,
   ArrowLeft,
   Sparkles,
-  Database,
   Trash2,
   CheckCircle2,
   Clock,
@@ -29,9 +28,6 @@ interface Props {
   subscribers?: NewsletterSubscriber[]
   onDeleteSubscriber?: (id: string) => Promise<void>
   onNavigate: (tab: string) => void
-  onSeedDatabase?: () => Promise<void>
-  onClearDatabase?: () => Promise<void>
-  dbConnected?: boolean
 }
 
 function formatOrderDate(dateStr?: string) {
@@ -60,11 +56,8 @@ export default function AdminOverview({
   subscribers = [],
   onDeleteSubscriber,
   onNavigate,
-  onSeedDatabase,
-  onClearDatabase,
 }: Props) {
   const [isProcessing, setIsProcessing] = useState(false)
-  const [showClearConfirm, setShowClearConfirm] = useState(false)
   const [showSubscribersModal, setShowSubscribersModal] = useState(false)
   const [copied, setCopied] = useState(false)
 
@@ -92,17 +85,8 @@ export default function AdminOverview({
   const newOrders       = orders.filter(o => o.status === 'جديد').length
   const publishedProducts = products.filter(p => p.isPublished).length
 
-  async function handleSeed() {
-    if (!onSeedDatabase) return
-    setIsProcessing(true)
-    try { await onSeedDatabase() } finally { setIsProcessing(false) }
-  }
-
-  async function handleClear() {
-    if (!onClearDatabase) return
-    setIsProcessing(true)
-    try { await onClearDatabase(); setShowClearConfirm(false) } finally { setIsProcessing(false) }
-  }
+  // Keep isProcessing in state for future async operations if needed
+  void isProcessing
 
   const KPI_CARDS = [
     {
@@ -334,76 +318,7 @@ export default function AdminOverview({
         )}
       </div>
 
-      {/* ── Database Management Tools ── */}
-      {(onSeedDatabase || onClearDatabase) && (
-        <div className="bg-[#FAF7F2] rounded-2xl sm:rounded-3xl border border-[#EADBCE] p-5 sm:p-8">
-          <div className="flex flex-col gap-4">
-            <div>
-              <h4 className="font-serif text-lg font-bold text-[#221811] m-0 mb-1" style={{ fontFamily: 'Amiri, serif' }}>
-                إدارة بيانات النظام
-              </h4>
-              <p className="text-xs text-[#685D52] m-0">
-                أدوات تهيئة بيانات العرض التجريبية أو تفريغ البيانات المؤقتة.
-              </p>
-            </div>
 
-            <div className="flex flex-wrap items-center gap-3">
-              {onSeedDatabase && (
-                <button
-                  onClick={handleSeed}
-                  disabled={isProcessing}
-                  className="flex-1 sm:flex-none rounded-xl bg-white border border-[#EADBCE] hover:border-[#8D6527] text-[#221811] text-xs font-semibold px-4 py-2.5 flex items-center justify-center gap-2 shadow-xs hover:shadow-sm transition-all disabled:opacity-50"
-                >
-                  <Database className="w-4 h-4 text-[#8D6527]" />
-                  <span>{isProcessing ? 'جارٍ العمل...' : 'تهيئة بيانات تجريبية'}</span>
-                </button>
-              )}
-
-              {onClearDatabase && (
-                <button
-                  onClick={() => setShowClearConfirm(true)}
-                  disabled={isProcessing}
-                  className="flex-1 sm:flex-none rounded-xl border border-red-200 hover:bg-red-50 text-red-600 text-xs font-semibold px-4 py-2.5 flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  <span>مسح البيانات</span>
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Clear Confirmation Modal ── */}
-      {showClearConfirm && (
-        <Modal onClose={() => !isProcessing && setShowClearConfirm(false)} size="sm">
-          <div className="bg-white rounded-3xl border border-[#EADBCE] shadow-2xl p-6 sm:p-8 max-w-sm w-full text-center">
-            <div className="w-14 h-14 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center mx-auto mb-4">
-              <AlertCircle className="w-6 h-6 stroke-[2]" />
-            </div>
-            <h3 className="font-serif text-2xl font-bold text-[#221811] m-0 mb-2" style={{ fontFamily: 'Amiri, serif' }}>
-              مسح كافة البيانات؟
-            </h3>
-            <p className="text-xs text-[#685D52] mb-6 leading-relaxed">
-              سيتم تفريغ كافة المنتجات والأقسام والطلبات من قاعدة البيانات. هل تريدين المتابعة؟
-            </p>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setShowClearConfirm(false)}
-                className="flex-1 py-3 rounded-xl border border-[#EADBCE] text-sm font-semibold text-[#685D52] hover:bg-[#FAF7F2] transition-colors"
-              >
-                إلغاء
-              </button>
-              <button
-                onClick={handleClear}
-                className="flex-1 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-bold shadow-xs transition-colors"
-              >
-                تأكيد المسح
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
 
       {/* ── Newsletter Subscribers Modal ── */}
       {showSubscribersModal && (

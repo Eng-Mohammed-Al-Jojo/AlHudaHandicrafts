@@ -86,6 +86,42 @@ function ScrollManager() {
   return null
 }
 
+// Dynamically swap the PWA manifest and theme meta so that the admin can install a separate
+// PWA shortcut that opens directly on /admin with admin theme, title, and manifest.
+function ManifestSwitcher() {
+  const { pathname } = useLocation()
+
+  useEffect(() => {
+    const isAdmin = pathname.startsWith('/admin')
+    const manifestHref = isAdmin ? '/manifest-admin.webmanifest' : '/manifest.webmanifest'
+    let link = document.querySelector<HTMLLinkElement>('link[rel="manifest"]')
+    if (!link) {
+      link = document.createElement('link')
+      link.rel = 'manifest'
+      document.head.appendChild(link)
+    }
+    if (link.href !== manifestHref) {
+      link.href = manifestHref
+    }
+
+    // Sync theme-color meta tag
+    const themeColor = isAdmin ? '#1a0f00' : '#7a572a'
+    let metaTheme = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
+    if (metaTheme && metaTheme.content !== themeColor) {
+      metaTheme.content = themeColor
+    }
+
+    // Sync apple-mobile-web-app-title
+    const appTitle = isAdmin ? 'لوحة الهدى' : 'الهدى'
+    let metaTitle = document.querySelector<HTMLMetaElement>('meta[name="apple-mobile-web-app-title"]')
+    if (metaTitle && metaTitle.content !== appTitle) {
+      metaTitle.content = appTitle
+    }
+  }, [pathname])
+
+  return null
+}
+
 function getFirestoreWriteErrorMessage(error: unknown, action: string) {
   const code = (error as { code?: string } | null)?.code
   const details = error instanceof Error ? error.message : ''
@@ -587,6 +623,7 @@ export default function App() {
     <CurrencyProvider settings={settings}>
     <BrowserRouter>
       <ScrollManager />
+      <ManifestSwitcher />
       <Routes>
         {/* ── Store ── */}
         <Route
@@ -666,9 +703,6 @@ export default function App() {
                     const path = tab === 'orders' ? 'orders' : tab === 'products' ? 'products' : tab === 'categories' ? 'categories' : ''
                     window.location.assign(`/admin/${path}`)
                   }}
-                  onSeedDatabase={handleSeedDatabase}
-                  onClearDatabase={handleClearDatabase}
-                  dbConnected={dbConnected}
                 />
               </AdminLayout>
             </AdminGuard>
@@ -729,6 +763,7 @@ export default function App() {
           }
         />
         <Route path="/admin/settings" element={<AdminGuard user={adminUser} ready={authReady}><AdminLayout user={adminUser!} onLogout={handleAdminLogout} unseenOrdersCount={unseenOrdersCount}><AdminSettings settings={settings} onSave={async next => { await updateSiteSettings(next); setSettings(next) }} notify={(msg, type) => notify(msg, type ?? 'success')} /></AdminLayout></AdminGuard>} />
+        <Route path="/admin/settings/:tab" element={<AdminGuard user={adminUser} ready={authReady}><AdminLayout user={adminUser!} onLogout={handleAdminLogout} unseenOrdersCount={unseenOrdersCount}><AdminSettings settings={settings} onSave={async next => { await updateSiteSettings(next); setSettings(next) }} notify={(msg, type) => notify(msg, type ?? 'success')} /></AdminLayout></AdminGuard>} />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -11,6 +11,13 @@ import {
   Menu,
   X,
   Calendar,
+  Sliders,
+  Truck,
+  CreditCard,
+  MessageCircle,
+  Coins,
+  ShieldCheck,
+  ChevronDown,
 } from 'lucide-react'
 import type { FirebaseUser } from '../../types'
 import Modal from '../ui/Modal'
@@ -24,12 +31,42 @@ interface Props {
   onClearUnseenOrders?: () => void
 }
 
-const NAV_ITEMS = [
+export interface SubNavItem {
+  id: string
+  label: string
+  to: string
+  icon: React.ComponentType<{ className?: string }>
+}
+
+export interface NavItem {
+  id: string
+  label: string
+  icon: React.ComponentType<{ className?: string }>
+  to: string
+  subItems?: SubNavItem[]
+}
+
+export const SETTINGS_SUB_ITEMS: SubNavItem[] = [
+  { id: 'general',       label: 'عامة والمتجر',          to: '/admin/settings/general',       icon: Sliders },
+  { id: 'shipping',      label: 'الشحن والتوصيل',        to: '/admin/settings/shipping',      icon: Truck },
+  { id: 'payment',       label: 'طرق الدفع والتحصيل',    to: '/admin/settings/payment',       icon: CreditCard },
+  { id: 'communication', label: 'التواصل وتوجيه الطلبات', to: '/admin/settings/communication', icon: MessageCircle },
+  { id: 'currencies',    label: 'العملات وأسعار الصرف',    to: '/admin/settings/currencies',    icon: Coins },
+  { id: 'backup',        label: 'النسخ الاحتياطي والأمان', to: '/admin/settings/backup',        icon: ShieldCheck },
+]
+
+const NAV_ITEMS: NavItem[] = [
   { id: 'overview',   label: 'نظرة عامة',  icon: LayoutDashboard, to: '/admin' },
   { id: 'products',   label: 'المنتجات',    icon: Package,         to: '/admin/products' },
   { id: 'categories', label: 'الأقسام',     icon: Layers,          to: '/admin/categories' },
   { id: 'orders',     label: 'الطلبات',     icon: ShoppingBag,     to: '/admin/orders' },
-  { id: 'settings',   label: 'الإعدادات',   icon: Settings,        to: '/admin/settings' },
+  {
+    id: 'settings',
+    label: 'الإعدادات',
+    icon: Settings,
+    to: '/admin/settings',
+    subItems: SETTINGS_SUB_ITEMS
+  },
 ]
 
 export default function AdminLayout({ user, onLogout, children, unseenOrdersCount = 0, onClearUnseenOrders }: Props) {
@@ -37,6 +74,15 @@ export default function AdminLayout({ user, onLogout, children, unseenOrdersCoun
   const [logoutConfirm, setLogoutConfirm] = useState(false)
   const location = useLocation()
   const currentPath = location.pathname
+
+  const isSettingsRoute = currentPath.startsWith('/admin/settings')
+  const [settingsExpanded, setSettingsExpanded] = useState(isSettingsRoute)
+
+  useEffect(() => {
+    if (isSettingsRoute) {
+      setSettingsExpanded(true)
+    }
+  }, [isSettingsRoute])
 
   // Clear unseen badge when visiting the orders page
   useEffect(() => {
@@ -100,10 +146,75 @@ export default function AdminLayout({ user, onLogout, children, unseenOrdersCoun
         </div>
 
         {/* Navigation Items */}
-        <nav className="flex-1 p-3 space-y-1 overflow-y-auto" aria-label="قائمة لوحة التحكم">
+        <nav className="flex-1 p-3 space-y-1.5 overflow-y-auto" aria-label="قائمة لوحة التحكم">
           {NAV_ITEMS.map(item => {
             const Icon = item.icon
             const active = isActive(item.to)
+            const hasSub = Boolean(item.subItems && item.subItems.length > 0)
+
+            if (hasSub) {
+              return (
+                <div key={item.id} className="space-y-1">
+                  <div
+                    className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                      active
+                        ? 'bg-[#8D6527]/10 text-[#8D6527]'
+                        : 'text-[#685D52] hover:bg-[#FAF7F2] hover:text-[#221811]'
+                    }`}
+                  >
+                    <Link
+                      to={item.to}
+                      onClick={() => {
+                        setSettingsExpanded(true)
+                      }}
+                      className="flex items-center gap-3 flex-1 no-underline text-inherit"
+                    >
+                      <Icon className="w-5 h-5 shrink-0 text-[#8D6527]" />
+                      <span className="flex-1 font-bold">{item.label}</span>
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        setSettingsExpanded(prev => !prev)
+                      }}
+                      className="p-1 rounded-lg text-[#8D6527] hover:bg-[#8D6527]/15 transition-colors cursor-pointer"
+                      title={settingsExpanded ? 'طي الإعدادات' : 'توسيع الإعدادات'}
+                      aria-label={settingsExpanded ? 'طي الأقسام الفرعية' : 'توسيع الأقسام الفرعية'}
+                    >
+                      <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${settingsExpanded ? 'rotate-180' : ''}`} />
+                    </button>
+                  </div>
+
+                  {/* Sub-items list */}
+                  {settingsExpanded && (
+                    <div className="mr-3 pr-2.5 border-r-2 border-[#EADBCE] space-y-1 py-1">
+                      {item.subItems!.map(sub => {
+                        const SubIcon = sub.icon
+                        const isSubActive = currentPath === sub.to || (sub.id === 'general' && currentPath === '/admin/settings')
+                        return (
+                          <Link
+                            key={sub.id}
+                            to={sub.to}
+                            onClick={() => setSidebarOpen(false)}
+                            className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all no-underline ${
+                              isSubActive
+                                ? 'bg-[#8D6527] text-white shadow-xs font-bold'
+                                : 'text-[#685D52] hover:bg-[#FAF7F2] hover:text-[#221811]'
+                            }`}
+                          >
+                            <SubIcon className={`w-3.5 h-3.5 shrink-0 ${isSubActive ? 'text-white' : 'text-[#8D6527]'}`} />
+                            <span className="truncate">{sub.label}</span>
+                          </Link>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )
+            }
+
             return (
               <Link
                 key={item.id}

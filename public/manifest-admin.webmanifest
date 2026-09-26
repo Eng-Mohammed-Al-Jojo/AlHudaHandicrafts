@@ -1,0 +1,71 @@
+{
+  "id": "/admin",
+  "name": "الهدى — لوحة الإدارة",
+  "short_name": "الهدى Admin",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "/admin",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1a0f00",
+  "theme_color": "#7a572a",
+  "description": "لوحة تحكم وإدارة متجر الهدى للمشغولات اليدوية — متابعة الطلبات والمنتجات والإعدادات",
+  "categories": ["business", "productivity"],
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "إدارة الطلبات",
+      "short_name": "الطلبات",
+      "description": "متابعة وتحديث طلبات الزبائن وتأكيد الدفع",
+      "url": "/admin/orders",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "إدارة المنتجات",
+      "short_name": "المنتجات",
+      "description": "إضافة وتعديل المنتجات والمخزون والتسعير",
+      "url": "/admin/products",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "إعدادات المتجر",
+      "short_name": "الإعدادات",
+      "description": "تخصيص الشحن، الدفع، وبيانات المتجر",
+      "url": "/admin/settings",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
