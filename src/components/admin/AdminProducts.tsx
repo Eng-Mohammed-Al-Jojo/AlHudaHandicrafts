@@ -57,6 +57,7 @@ export default function AdminProducts({
   const [uploading, setUploading] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [imageDeleteTarget, setImageDeleteTarget] = useState<{ kind: 'saved' | 'pending'; index: number } | null>(null)
   const [search, setSearch] = useState('')
 
   function openNewForm() {
@@ -65,6 +66,7 @@ export default function AdminProducts({
     setSavedImageUrls([])
     setPendingImages([])
     setImageUrlInput('')
+    setImageDeleteTarget(null)
     setShowForm(true)
   }
 
@@ -82,6 +84,7 @@ export default function AdminProducts({
     setSavedImageUrls([...p.images].sort((a, b) => a.order - b.order).map(i => i.url))
     setPendingImages([])
     setImageUrlInput('')
+    setImageDeleteTarget(null)
     setShowForm(true)
   }
 
@@ -92,6 +95,7 @@ export default function AdminProducts({
     setSavedImageUrls([])
     setPendingImages([])
     setImageUrlInput('')
+    setImageDeleteTarget(null)
   }
 
   function handleImageChange(e: ChangeEvent<HTMLInputElement>) {
@@ -209,6 +213,16 @@ export default function AdminProducts({
     }
   }
 
+  function confirmImageDelete() {
+    if (!imageDeleteTarget) return
+    if (imageDeleteTarget.kind === 'saved') {
+      setSavedImageUrls(urls => urls.filter((_, i) => i !== imageDeleteTarget.index))
+    } else {
+      setPendingImages(imgs => imgs.filter((_, i) => i !== imageDeleteTarget.index))
+    }
+    setImageDeleteTarget(null)
+  }
+
   async function confirmDelete() {
     if (!deleteId || isDeleting) return
     setIsDeleting(true)
@@ -226,6 +240,11 @@ export default function AdminProducts({
     p.name.toLowerCase().includes(search.toLowerCase()) ||
     p.categoryName.toLowerCase().includes(search.toLowerCase())
   )
+  const imageDeletePreview = imageDeleteTarget
+    ? imageDeleteTarget.kind === 'saved'
+      ? savedImageUrls[imageDeleteTarget.index]
+      : pendingImages[imageDeleteTarget.index]?.preview
+    : null
 
   return (
     <div className="space-y-5 max-w-7xl mx-auto animate-fade-in">
@@ -610,16 +629,17 @@ export default function AdminProducts({
                     {(savedImageUrls.length + pendingImages.length) > 0 ? (
                       <div className="grid grid-cols-3 gap-2 pt-2 border-t border-[#EADBCE]">
                         {savedImageUrls.map((url, idx) => (
-                          <div key={`saved-${idx}`} className="relative aspect-square rounded-xl overflow-hidden border border-[#EADBCE] group shadow-xs">
-                            <img src={url} alt="" className="w-full h-full object-cover transition-transform group-hover:scale-105" />
-                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors" />
+                          <div key={`saved-${idx}`} className="relative aspect-square rounded-xl border border-[#EADBCE] group shadow-xs">
+                            <img src={url} alt="" className="w-full h-full object-cover rounded-xl transition-transform group-hover:scale-105" />
+                            <div className="absolute inset-0 rounded-xl bg-black/0 group-hover:bg-black/30 transition-colors" />
                             <button
                               type="button"
-                              onClick={() => setSavedImageUrls(urls => urls.filter((_, i) => i !== idx))}
-                              className="absolute top-1 left-1 w-6 h-6 rounded-full bg-red-600 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+                              onClick={() => setImageDeleteTarget({ kind: 'saved', index: idx })}
+                              className="absolute -top-2 -left-2 z-10 w-8 h-8 rounded-full bg-red-600 text-white flex items-center justify-center opacity-100 shadow-md ring-2 ring-white/90"
                               title="حذف الصورة"
+                              aria-label="حذف الصورة"
                             >
-                              <X className="w-3 h-3" />
+                              <X className="w-4 h-4" />
                             </button>
                             {idx === 0 && (
                               <span className="absolute bottom-1 right-1 bg-[#8D6527] text-white text-[8px] font-bold px-1.5 py-0.5 rounded-md">
@@ -629,19 +649,20 @@ export default function AdminProducts({
                           </div>
                         ))}
                         {pendingImages.map((img, idx) => (
-                          <div key={`pending-${idx}`} className="relative aspect-square rounded-xl overflow-hidden border-2 border-amber-300 group shadow-xs">
-                            <img src={img.preview} alt="" className="w-full h-full object-cover" />
-                            <div className="absolute inset-0 bg-amber-500/10" />
+                          <div key={`pending-${idx}`} className="relative aspect-square rounded-xl border-2 border-amber-300 group shadow-xs">
+                            <img src={img.preview} alt="" className="w-full h-full object-cover rounded-xl" />
+                            <div className="absolute inset-0 rounded-xl bg-amber-500/10" />
                             <span className="absolute bottom-1 right-1 bg-amber-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-md">
                               قيد الرفع
                             </span>
                             <button
                               type="button"
-                              onClick={() => setPendingImages(imgs => imgs.filter((_, i) => i !== idx))}
-                              className="absolute top-1 left-1 w-6 h-6 rounded-full bg-red-600 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+                              onClick={() => setImageDeleteTarget({ kind: 'pending', index: idx })}
+                              className="absolute -top-2 -left-2 z-10 w-8 h-8 rounded-full bg-red-600 text-white flex items-center justify-center opacity-100 shadow-md ring-2 ring-white/90"
                               title="حذف الصورة"
+                              aria-label="حذف الصورة"
                             >
-                              <X className="w-3 h-3" />
+                              <X className="w-4 h-4" />
                             </button>
                           </div>
                         ))}
@@ -691,6 +712,46 @@ export default function AdminProducts({
                 className="flex-1 rounded-xl bg-[#8D6527] hover:bg-[#704F1E] text-white text-sm font-bold py-3 shadow-sm transition-all disabled:opacity-50"
               >
                 {uploading ? 'جارٍ الحفظ...' : editing ? 'حفظ التعديلات' : 'إضافة المنتج'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── Image Delete Confirmation Modal ── */}
+      {imageDeleteTarget && (
+        <Modal onClose={() => setImageDeleteTarget(null)} size="sm">
+          <div className="p-6 sm:p-8 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center mx-auto mb-4">
+              <AlertCircle className="w-6 h-6 stroke-[2]" />
+            </div>
+            <h3 className="font-serif text-2xl font-bold text-[#221811] m-0 mb-2" style={{ fontFamily: 'Amiri, serif' }}>
+              حذف الصورة؟
+            </h3>
+            {imageDeletePreview && (
+              <img
+                src={imageDeletePreview}
+                alt="الصورة المحددة للحذف"
+                className="w-24 h-24 rounded-xl object-cover border border-[#EADBCE] mx-auto mb-4"
+              />
+            )}
+            <p className="text-xs text-[#685D52] mb-6 leading-relaxed">
+              هل أنتِ متأكدة من إزالة هذه الصورة من مسودة المنتج؟ يمكنك إضافة صورة بديلة قبل الحفظ.
+            </p>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setImageDeleteTarget(null)}
+                className="flex-1 py-3 rounded-xl border border-[#EADBCE] text-sm font-semibold text-[#685D52] hover:bg-[#FAF7F2] transition-colors"
+              >
+                إلغاء
+              </button>
+              <button
+                type="button"
+                onClick={confirmImageDelete}
+                className="flex-1 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-bold shadow-xs transition-colors"
+              >
+                نعم، احذفيها
               </button>
             </div>
           </div>

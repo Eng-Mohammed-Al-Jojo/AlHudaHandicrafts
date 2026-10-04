@@ -37,6 +37,7 @@ export default function AdminCategories({ categories, products, user, onAdd, onU
   const [pendingImageFile, setPendingImageFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string>('')
   const [uploading, setUploading] = useState(false)
+  const [confirmImageRemoval, setConfirmImageRemoval] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   function openNew() {
@@ -45,6 +46,7 @@ export default function AdminCategories({ categories, products, user, onAdd, onU
     setPendingImageFile(null)
     setPreviewUrl('')
     setImageMode('upload')
+    setConfirmImageRemoval(false)
     setShowModal(true)
   }
 
@@ -61,6 +63,7 @@ export default function AdminCategories({ categories, products, user, onAdd, onU
     setPendingImageFile(null)
     setPreviewUrl(c.imageUrl ?? '')
     setImageMode(c.imageUrl ? 'url' : 'upload')
+    setConfirmImageRemoval(false)
     setShowModal(true)
   }
 
@@ -70,6 +73,7 @@ export default function AdminCategories({ categories, products, user, onAdd, onU
     setEditing(null)
     setPendingImageFile(null)
     setPreviewUrl('')
+    setConfirmImageRemoval(false)
   }
 
   function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
@@ -93,6 +97,16 @@ export default function AdminCategories({ categories, products, user, onAdd, onU
     setPreviewUrl('')
     setDraft(d => ({ ...d, imageUrl: '' }))
     if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  function requestImageRemoval() {
+    if (!previewUrl && !draft.imageUrl?.trim()) return
+    setConfirmImageRemoval(true)
+  }
+
+  function confirmImageRemovalAction() {
+    handleRemoveImage()
+    setConfirmImageRemoval(false)
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -159,6 +173,7 @@ export default function AdminCategories({ categories, products, user, onAdd, onU
       setEditing(null)
       setPendingImageFile(null)
       setPreviewUrl('')
+      setConfirmImageRemoval(false)
     } finally {
       setUploading(false)
     }
@@ -418,7 +433,7 @@ export default function AdminCategories({ categories, products, user, onAdd, onU
                             <span className="text-gray-300">•</span>
                             <button
                               type="button"
-                              onClick={handleRemoveImage}
+                              onClick={requestImageRemoval}
                               className="text-[11px] font-semibold text-red-600 hover:underline cursor-pointer"
                             >
                               إزالة
@@ -476,6 +491,13 @@ export default function AdminCategories({ categories, products, user, onAdd, onU
                           onError={(e) => { (e.target as HTMLElement).style.display = 'none' }}
                         />
                         <span className="text-[11px] text-emerald-700 font-medium">تم ضبط الرابط للمعاينة</span>
+                        <button
+                          type="button"
+                          onClick={requestImageRemoval}
+                          className="ms-auto text-[11px] font-semibold text-red-600 hover:underline cursor-pointer"
+                        >
+                          إزالة الصورة
+                        </button>
                       </div>
                     )}
                   </div>
@@ -550,6 +572,48 @@ export default function AdminCategories({ categories, products, user, onAdd, onU
             </div>
 
           </form>
+        </Modal>
+      )}
+
+      {/* Image Remove Confirmation */}
+      {confirmImageRemoval && (
+        <Modal onClose={() => !uploading && setConfirmImageRemoval(false)} size="sm">
+          <div className="p-6 sm:p-8 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center mx-auto mb-4">
+              <AlertCircle className="w-6 h-6 stroke-[2]" />
+            </div>
+            <h3 className="font-serif text-2xl font-bold text-[#221811] m-0 mb-2" style={{ fontFamily: 'Amiri, serif' }}>
+              إزالة صورة القسم؟
+            </h3>
+            {previewUrl && (
+              <img
+                src={previewUrl}
+                alt="الصورة المحددة للإزالة"
+                className="w-24 h-24 rounded-xl object-cover border border-[#EADBCE] mx-auto mb-4"
+              />
+            )}
+            <p className="text-xs text-[#685D52] mb-6 leading-relaxed">
+              هل أنتِ متأكدة من إزالة الصورة من مسودة القسم؟ يمكنك إضافة صورة بديلة قبل الحفظ.
+            </p>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmImageRemoval(false)}
+                disabled={uploading}
+                className="flex-1 py-2.5 rounded-xl border border-[#EADBCE] text-xs font-semibold text-[#685D52] hover:bg-[#FAF7F2] disabled:opacity-50"
+              >
+                إلغاء
+              </button>
+              <button
+                type="button"
+                onClick={confirmImageRemovalAction}
+                disabled={uploading}
+                className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-xs transition-colors disabled:opacity-60"
+              >
+                نعم، أزيليها
+              </button>
+            </div>
+          </div>
         </Modal>
       )}
 
