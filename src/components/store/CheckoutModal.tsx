@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import {
   User,
   Phone,
@@ -9,7 +9,6 @@ import {
   ShoppingBag,
   ArrowLeft,
   MessageCircle,
-  ChevronDown,
   Check,
   X,
   ShieldCheck,
@@ -21,6 +20,7 @@ import {
 } from 'lucide-react'
 import type { CartItem, CurrencyCode, PaymentMethod, PaymentMethodId, SiteSettings } from '../../types'
 import Modal from '../ui/Modal'
+import SelectMenu from '../ui/SelectMenu'
 import { useCurrency } from '../../context/CurrencyContext'
 import { getFreeShippingStatus } from '../../utils/commerce'
 
@@ -495,64 +495,22 @@ function CitySelect({ id, value, options, onChange, disabled }: {
   onChange: (value: string) => void
   disabled?: boolean
 }) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
   const uniqueOptions = Array.from(new Set(options.map(option => option.trim()).filter(Boolean)))
 
-  useEffect(() => {
-    const closeOnOutsideClick = (event: MouseEvent) => {
-      if (!ref.current?.contains(event.target as Node)) setOpen(false)
-    }
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false)
-    }
-    document.addEventListener('mousedown', closeOnOutsideClick)
-    document.addEventListener('keydown', closeOnEscape)
-    return () => {
-      document.removeEventListener('mousedown', closeOnOutsideClick)
-      document.removeEventListener('keydown', closeOnEscape)
-    }
-  }, [])
-
   return (
-    <div ref={ref} className="relative w-full min-w-0">
-      <button
-        id={id}
-        type="button"
-        disabled={disabled}
-        onClick={() => !disabled && setOpen(current => !current)}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        className="w-full min-h-[20px] flex items-center justify-between gap-2 text-right text-xs text-[#221811] outline-none disabled:opacity-60"
-      >
-        <span className={value ? 'font-semibold' : 'text-[#968B7E]'}>{value || 'اختاري المدينة أو المنطقة'}</span>
-        <ChevronDown className={`w-4 h-4 text-[#8D6527] transition-transform duration-200 shrink-0 ${open ? 'rotate-180' : ''}`} />
-      </button>
-      <input type="hidden" name="city" value={value} />
-      {open && !disabled && (
-        <div className="absolute top-[calc(100%+8px)] right-0 left-0 z-40 max-h-56 overflow-y-auto rounded-2xl border border-[#EADBCE] bg-white p-1.5 shadow-xl animate-scale-in" role="listbox">
-          {uniqueOptions.map(option => {
-            const selected = option === value
-            return (
-              <button
-                key={option}
-                type="button"
-                role="option"
-                aria-selected={selected}
-                onClick={() => {
-                  onChange(option)
-                  setOpen(false)
-                }}
-                className={`w-full flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-xs text-right transition-colors ${selected ? 'bg-[#FAF7F2] text-[#8D6527] font-bold' : 'text-[#685D52] hover:bg-[#FAF7F2] hover:text-[#221811]'}`}
-              >
-                <span>{option}</span>
-                {selected && <Check className="w-3.5 h-3.5 text-[#8D6527] shrink-0" />}
-              </button>
-            )
-          })}
-        </div>
-      )}
-    </div>
+    <SelectMenu
+      id={id}
+      name="city"
+      value={value}
+      options={uniqueOptions.map(option => ({ value: option, label: option }))}
+      onChange={onChange}
+      placeholder="اختاري المدينة أو المنطقة"
+      disabled={disabled}
+      variant="bare"
+      className="w-full min-w-0"
+      triggerClassName="min-h-[20px] text-xs font-semibold text-[#221811]"
+      ariaLabel="المدينة أو المنطقة"
+    />
   )
 }
 

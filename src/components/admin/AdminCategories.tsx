@@ -3,6 +3,7 @@ import { Plus, Edit3, Trash2, Layers, Sparkles, X, AlertCircle, Upload, Link as 
 import type { Category, FirebaseUser, Product } from '../../types'
 import { uploadCategoryImage } from '../../firebase'
 import Modal from '../ui/Modal'
+import SelectMenu from '../ui/SelectMenu'
 
 interface Props {
   categories: Category[]
@@ -635,17 +636,16 @@ export default function AdminCategories({ categories, products, user, onAdd, onU
                 <label className="block text-xs font-semibold text-[#221811] text-right mb-1.5">
                   القسم البديل لنقل المنتجات
                 </label>
-                <select
+                <SelectMenu
                   value={moveTargetId}
-                  onChange={event => setMoveTargetId(event.target.value)}
+                  options={targetCategories.map(category => ({ value: category.id, label: category.name }))}
+                  onChange={setMoveTargetId}
+                  placeholder="اختاري القسم البديل"
                   disabled={isDeleting || targetCategories.length === 0}
-                  className="w-full bg-[#FAF7F2] border border-[#EADBCE] rounded-xl px-3 py-2.5 text-xs text-[#221811] outline-none focus:border-[#8D6527] disabled:opacity-60"
-                >
-                  <option value="">اختاري القسم البديل</option>
-                  {targetCategories.map(category => (
-                    <option key={category.id} value={category.id}>{category.name}</option>
-                  ))}
-                </select>
+                  variant="admin"
+                  className="w-full"
+                  ariaLabel="القسم البديل لنقل المنتجات"
+                />
                 {targetCategories.length === 0 && (
                   <p className="text-[11px] text-red-700 mt-2 mb-0">أضيفي قسمًا بديلًا أولًا قبل حذف هذا القسم.</p>
                 )}

@@ -24,9 +24,10 @@ import {
   serverTimestamp,
   writeBatch
 } from 'firebase/firestore'
-import type { Product, Category, Order, OrderStatus, SiteSettings, NewsletterSubscriber, PaymentMethod, PaymentMethodDetails, PaymentMethodId } from './types'
+import type { Product, Category, Order, OrderStatus, PaymentStatus, SiteSettings, NewsletterSubscriber, PaymentMethod, PaymentMethodDetails, PaymentMethodId, Invoice, InvoiceDraft } from './types'
 import { DEFAULT_SITE_SETTINGS } from './types'
 import { getFreeShippingThreshold } from './utils/commerce'
+import { normalizeWhatsAppNumber } from './utils/whatsapp'
 
 export const firebaseConfig = {
   apiKey: 'AIzaSyBpUaD5Jk-H3Ip6szA9iKgYBwinE0SMwUQ',
@@ -163,6 +164,7 @@ const ORDERS_COLLECTION = 'orders'
 const SETTINGS_COLLECTION = 'settings'
 const SETTINGS_DOCUMENT = 'store'
 const SUBSCRIBERS_COLLECTION = 'subscribers'
+const INVOICES_COLLECTION = 'invoices'
 function normalizePaymentDetails(value: unknown, fallback: PaymentMethodDetails): PaymentMethodDetails {
   const saved = value && typeof value === 'object' ? value as Record<string, unknown> : {}
   return {
@@ -492,7 +494,11 @@ export function subscribeToOrders(
           ...(hasCurrencySnapshot ? { displayCurrency, displayRate, displayTotal } : {}),
           shippingStatus: data.shippingStatus === 'free' || data.shippingStatus === 'standard' ? data.shippingStatus : undefined,
           shippingThreshold: Number.isFinite(Number(data.shippingThreshold)) ? Number(data.shippingThreshold) : undefined,
-          paymentStatus: data.paymentStatus === 'paid' ? 'paid' : 'pending',
+          paymentStatus: data.status === 'ملغي'
+            ? 'cancelled'
+            : data.paymentStatus === 'paid'
+              ? 'paid'
+              : 'pending',
            requestedPaymentMethod: isPaymentMethodId(data.requestedPaymentMethod) ? data.requestedPaymentMethod : undefined,
            paymentMethod: isPaymentMethodId(data.paymentMethod) ? data.paymentMethod : undefined,
            paymentMethodLabel: typeof data.paymentMethodLabel === 'string' ? data.paymentMethodLabel : undefined,
@@ -526,9 +532,12 @@ export async function addOrderToFirestore(order: Omit<Order, 'id'>): Promise<str
 /**
  * Update an order's status in Firestore
  */
-export async function updateOrderStatusInFirestore(id: string, status: OrderStatus): Promise<void> {
+export async function updateOrderStatusInFirestore(id: string, status: OrderStatus, paymentStatus?: PaymentStatus): Promise<void> {
   const docRef = doc(db, ORDERS_COLLECTION, id)
-  await updateDoc(docRef, { status })
+  await updateDoc(docRef, {
+    status,
+    ...(paymentStatus ? { paymentStatus } : {}),
+  })
 }
 
 /** Update the editable details of an existing order. */
@@ -544,15 +553,85 @@ export async function deleteOrderFromFirestore(id: string): Promise<void> {
   await deleteDoc(doc(db, ORDERS_COLLECTION, id))
 }
 
+// ─── FIRESTORE: Invoices ──────────────────────────────────────────────────────
+
+function mapInvoiceDoc(id: string, data: Record<string, unknown>): Invoice {
+  const createdAt = data.createdAt as { toDate?: () => Date } | string | undefined
+  const updatedAt = data.updatedAt as { toDate?: () => Date } | string | undefined
+  return {
+    id,
+    invoiceNumber: (data.invoiceNumber as string) || '',
+    type: data.type === 'purchase' ? 'purchase' : 'sale',
+    orderId: (data.orderId as string) || undefined,
+    customerName: (data.customerName as string) || '',
+    customerPhone: (data.customerPhone as string) || '',
+    deliveryAddress: (data.deliveryAddress as string) || '',
+    items: Array.isArray(data.items) ? (data.items as Invoice['items']) : [],
+    extraDiscount: typeof data.extraDiscount === 'number' ? data.extraDiscount : 0,
+    notes: (data.notes as string) || '',
+    signature: (data.signature as Invoice['signature']) || undefined,
+    createdAt: createdAt && typeof createdAt === 'object' && createdAt.toDate
+      ? createdAt.toDate().toISOString()
+      : (typeof createdAt === 'string' ? createdAt : new Date().toISOString()),
+    updatedAt: updatedAt && typeof updatedAt === 'object' && updatedAt.toDate
+      ? updatedAt.toDate().toISOString()
+      : (typeof updatedAt === 'string' ? updatedAt : undefined),
+  }
+}
+
+/** Create a manual invoice (sale or purchase) from the dashboard. */
+export async function addInvoiceToFirestore(draft: InvoiceDraft): Promise<string> {
+  const docRef = await addDoc(collection(db, INVOICES_COLLECTION), {
+    ...withoutUndefinedFields(draft),
+    createdAt: serverTimestamp(),
+  })
+  return docRef.id
+}
+
+/** Persist edits to an existing manual invoice. */
+export async function updateInvoiceInFirestore(id: string, draft: InvoiceDraft): Promise<void> {
+  await updateDoc(doc(db, INVOICES_COLLECTION, id), {
+    ...withoutUndefinedFields(draft),
+    updatedAt: serverTimestamp(),
+  })
+}
+
+/** Permanently remove a manual invoice; restricted to administrators by rules. */
+export async function deleteInvoiceFromFirestore(id: string): Promise<void> {
+  await deleteDoc(doc(db, INVOICES_COLLECTION, id))
+}
+
+/** Subscribe to the manual invoices list in real time (admin only). */
+export function subscribeToInvoices(
+  onSuccess: (invoices: Invoice[]) => void,
+  onError?: (err: Error) => void
+) {
+  const q = collection(db, INVOICES_COLLECTION)
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const list = snapshot.docs.map(docSnap => mapInvoiceDoc(docSnap.id, docSnap.data()))
+      list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      onSuccess(list)
+    },
+    (err) => {
+      console.warn('Firestore invoices listener error:', err)
+      if (onError) onError(err)
+    }
+  )
+}
+
 // ─── FIRESTORE: Subscribers (Newsletter) ──────────────────────────────────────
 
 /**
- * Add a newsletter subscriber to Firestore
+ * Add a friend to the WhatsApp list ("أصدقاء الهدى") in Firestore.
+ * The collection keeps its original name so existing dashboards and backups keep working.
  */
-export async function addSubscriberToFirestore(email: string, source = 'storefront_newsletter'): Promise<string> {
+export async function addSubscriberToFirestore(name: string, phone: string, source = 'storefront_whatsapp'): Promise<string> {
   const colRef = collection(db, SUBSCRIBERS_COLLECTION)
   const docRef = await addDoc(colRef, {
-    email: email.trim().toLowerCase(),
+    name: name.trim(),
+    phone: normalizeWhatsAppNumber(phone),
     source,
     status: 'active',
     createdAt: serverTimestamp(),
@@ -575,6 +654,8 @@ export function subscribeToSubscribers(
         const data = docSnap.data()
         return {
           id: docSnap.id,
+          name: data.name || '',
+          phone: data.phone || '',
           email: data.email || '',
           source: data.source || 'متجر الهدى',
           status: data.status || 'active',
@@ -636,15 +717,17 @@ export async function seedInitialDatabase(
  * Clear all records from Firestore collections (used for resetting/removing temporary data)
  */
 export async function clearAllFirestoreData(): Promise<void> {
-  const [prodSnaps, catSnaps, ordSnaps] = await Promise.all([
+  const [prodSnaps, catSnaps, ordSnaps, invSnaps] = await Promise.all([
     getDocs(collection(db, PRODUCTS_COLLECTION)),
     getDocs(collection(db, CATEGORIES_COLLECTION)),
     getDocs(collection(db, ORDERS_COLLECTION)),
+    getDocs(collection(db, INVOICES_COLLECTION)),
   ])
 
   const batch = writeBatch(db)
   prodSnaps.docs.forEach((d) => batch.delete(d.ref))
   catSnaps.docs.forEach((d) => batch.delete(d.ref))
   ordSnaps.docs.forEach((d) => batch.delete(d.ref))
+  invSnaps.docs.forEach((d) => batch.delete(d.ref))
   await batch.commit()
 }

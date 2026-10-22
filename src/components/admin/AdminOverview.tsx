@@ -10,7 +10,7 @@ import {
   CheckCircle2,
   Clock,
   AlertCircle,
-  Mail,
+  MessageCircle,
   Copy,
   Download,
   Check,
@@ -18,12 +18,15 @@ import {
   Phone,
   Calendar,
 } from 'lucide-react'
-import type { Product, Order, NewsletterSubscriber } from '../../types'
+import type { Product, Order, NewsletterSubscriber, Invoice } from '../../types'
 import Modal from '../ui/Modal'
+import { formatWhatsAppNumber, whatsappLink } from '../../utils/whatsapp'
+import { calculateInvoiceTotals } from '../../utils/manualInvoice'
 
 interface Props {
   products: Product[]
   orders: Order[]
+  invoices?: Invoice[]
   categoriesCount?: number
   subscribers?: NewsletterSubscriber[]
   onDeleteSubscriber?: (id: string) => Promise<void>
@@ -52,6 +55,7 @@ const STATUS_STYLE: Record<string, string> = {
 export default function AdminOverview({
   products,
   orders,
+  invoices = [],
   categoriesCount = 0,
   subscribers = [],
   onDeleteSubscriber,
@@ -61,27 +65,44 @@ export default function AdminOverview({
   const [showSubscribersModal, setShowSubscribersModal] = useState(false)
   const [copied, setCopied] = useState(false)
 
-  function copyAllEmails() {
+  function copyAllPhones() {
     if (subscribers.length === 0) return
-    navigator.clipboard.writeText(subscribers.map(s => s.email).join(', '))
+    const numbers = subscribers
+      .map(s => s.phone || s.email || '')
+      .filter(Boolean)
+      .join(', ')
+    navigator.clipboard.writeText(numbers)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
 
   function exportSubscribersCSV() {
     if (subscribers.length === 0) return
-    const header = 'Email,Created At,Source\n'
-    const rows = subscribers.map(s => `"${s.email}","${s.createdAt}","${s.source || 'Newsletter'}"`).join('\n')
+    const header = 'Name,WhatsApp,Created At,Source\n'
+    const rows = subscribers
+      .map(s => `"${s.name || ''}","${s.phone || s.email || ''}","${s.createdAt}","${s.source || 'WhatsApp'}"`)
+      .join('\n')
     const blob = new Blob([header + rows], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `alhuda_subscribers_${new Date().toISOString().slice(0, 10)}.csv`
+    a.download = `alhuda_friends_${new Date().toISOString().slice(0, 10)}.csv`
     a.click()
     URL.revokeObjectURL(url)
   }
 
-  const totalSales      = orders.reduce((sum, o) => sum + o.total, 0)
+  const linkedSaleInvoiceByOrder = new Map<string, Invoice>()
+  invoices.forEach(invoice => {
+    if (invoice.type === 'sale' && invoice.orderId && !linkedSaleInvoiceByOrder.has(invoice.orderId)) {
+      linkedSaleInvoiceByOrder.set(invoice.orderId, invoice)
+    }
+  })
+  const paidOrders      = orders.filter(o => o.paymentStatus === 'paid' && o.status !== 'ملغي')
+  // When an invoice was issued for an order, its final total (after discounts) is the actual sale value.
+  const totalSales      = paidOrders.reduce((sum, order) => {
+    const linkedInvoice = linkedSaleInvoiceByOrder.get(order.id)
+    return sum + (linkedInvoice ? calculateInvoiceTotals(linkedInvoice).total : order.total)
+  }, 0)
   const newOrders       = orders.filter(o => o.status === 'جديد').length
   const publishedProducts = products.filter(p => p.isPublished).length
 
@@ -91,13 +112,13 @@ export default function AdminOverview({
   const KPI_CARDS = [
     {
       label: 'إجمالي المبيعات',
-      value: totalSales,
+      value: totalSales.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }),
       unit: 'شيكل',
       icon: TrendingUp,
       iconBg: 'bg-amber-50 text-[#8D6527]',
-      note: 'من كافة الطلبات المسجلة',
+      note: paidOrders.length > 0 ? 'من الطلبات المؤكدة الدفع فقط' : 'لا توجد مبيعات مؤكدة الدفع بعد',
       noteIcon: <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />,
-      noteColor: 'text-emerald-700',
+      noteColor: paidOrders.length > 0 ? 'text-emerald-700' : 'text-[#685D52]',
     },
     {
       label: 'طلبات جديدة',
@@ -195,25 +216,25 @@ export default function AdminOverview({
           )
         })}
 
-        {/* Newsletter Subscribers — full width on mobile, 1 col on desktop */}
+        {/* WhatsApp friends list — full width on mobile, 1 col on desktop */}
         <div
           onClick={() => setShowSubscribersModal(true)}
           className="col-span-2 lg:col-span-4 xl:col-span-1 xl:col-start-5 bg-white rounded-2xl border border-[#EADBCE] p-4 sm:p-5 shadow-xs hover:border-[#8D6527] transition-all cursor-pointer group hover:shadow-sm"
         >
           <div className="flex items-center justify-between mb-3">
-            <span className="text-[11px] sm:text-xs font-bold text-[#685D52]">المشتركات بالنشرة</span>
+            <span className="text-[11px] sm:text-xs font-bold text-[#685D52]">أصدقاء الهدى</span>
             <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center group-hover:scale-110 transition-transform">
-              <Mail className="w-4 h-4 sm:w-5 sm:h-5" />
+              <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
           </div>
           <div className="flex items-baseline gap-1 mb-1">
             <strong className="text-2xl sm:text-3xl font-serif text-[#221811]" style={{ fontFamily: 'Amiri, serif' }}>
               {subscribers.length}
             </strong>
-            <small className="text-[10px] sm:text-xs text-[#685D52] font-semibold">مشتركة</small>
+            <small className="text-[10px] sm:text-xs text-[#685D52] font-semibold">صديقة</small>
           </div>
           <p className="text-[10px] sm:text-[11px] text-[#8D6527] font-semibold m-0 flex items-center gap-1 group-hover:underline">
-            <span>استعراض وتصدير الإيميلات</span>
+            <span>استعراض أرقام الواتساب</span>
             <ArrowLeft className="w-3 h-3" />
           </p>
         </div>
@@ -320,7 +341,7 @@ export default function AdminOverview({
 
 
 
-      {/* ── Newsletter Subscribers Modal ── */}
+      {/* ── WhatsApp Friends Modal ── */}
       {showSubscribersModal && (
         <Modal onClose={() => setShowSubscribersModal(false)} size="lg" className="overflow-hidden p-0">
           <div className="bg-white rounded-2xl sm:rounded-3xl border border-[#EADBCE] shadow-2xl max-w-4xl w-full mx-auto max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
@@ -329,14 +350,14 @@ export default function AdminOverview({
             <div className="bg-[#FAF7F2] p-5 sm:p-6 border-b border-[#EADBCE] flex items-center justify-between shrink-0">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-10 h-10 rounded-xl bg-emerald-100/80 text-emerald-800 flex items-center justify-center shrink-0">
-                  <Mail className="w-5 h-5" />
+                  <MessageCircle className="w-5 h-5" />
                 </div>
                 <div className="min-w-0">
                   <h3 className="font-serif text-base sm:text-xl font-bold text-[#221811] m-0 truncate" style={{ fontFamily: 'Amiri, serif' }}>
-                    المشتركات في النشرة ({subscribers.length})
+                    أصدقاء الهدى · واتساب ({subscribers.length})
                   </h3>
                   <p className="text-[11px] text-[#685D52] m-0 hidden sm:block">
-                    قائمة إيميلات العميلات المسجلات عبر المتجر
+                    أسماء وأرقام واتساب العميلات المنضمات عبر المتجر
                   </p>
                 </div>
               </div>
@@ -355,14 +376,15 @@ export default function AdminOverview({
               </span>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={copyAllEmails}
+                  onClick={copyAllPhones}
                   disabled={subscribers.length === 0}
                   className="rounded-xl border border-[#EADBCE] bg-white hover:border-[#8D6527] text-[#221811] text-xs font-bold px-3 py-2 flex items-center gap-1.5 transition-all shadow-xs cursor-pointer disabled:opacity-40"
+                  title="نسخ كل أرقام الواتساب"
                 >
                   {copied ? (
                     <><Check className="w-3.5 h-3.5 text-emerald-600" /><span className="text-emerald-700">تم!</span></>
                   ) : (
-                    <><Copy className="w-3.5 h-3.5 text-[#8D6527]" /><span className="hidden sm:inline">نسخ الكل</span></>
+                    <><Copy className="w-3.5 h-3.5 text-[#8D6527]" /><span className="hidden sm:inline">نسخ الأرقام</span></>
                   )}
                 </button>
                 <button
@@ -381,10 +403,10 @@ export default function AdminOverview({
               {subscribers.length === 0 ? (
                 <div className="p-12 text-center lg:col-span-2">
                   <div className="w-12 h-12 rounded-2xl bg-[#FAF7F2] text-[#8D6527] flex items-center justify-center mx-auto mb-3">
-                    <Mail className="w-6 h-6 stroke-[1.5]" />
+                    <MessageCircle className="w-6 h-6 stroke-[1.5]" />
                   </div>
-                  <h4 className="font-serif text-lg text-[#221811] m-0 mb-1">لا توجد مشتركات بعد</h4>
-                  <p className="text-xs text-[#685D52] m-0">ستظهر إيميلات العميلات هنا فوراً عند تسجيلهن.</p>
+                  <h4 className="font-serif text-lg text-[#221811] m-0 mb-1">لا توجد منضمات بعد</h4>
+                  <p className="text-xs text-[#685D52] m-0">ستظهر أسماء وأرقام واتساب العميلات هنا فور انضمامهن.</p>
                 </div>
               ) : (
                 subscribers.map((sub, index) => (
@@ -395,18 +417,46 @@ export default function AdminOverview({
                     <div className="flex items-center gap-3 min-w-0">
                       <span className="w-6 text-center text-xs font-semibold text-[#968B7E] shrink-0">{index + 1}</span>
                       <div className="min-w-0">
-                        <span className="text-xs font-bold text-[#221811] block truncate font-mono" dir="ltr">{sub.email}</span>
-                        <span className="text-[11px] text-[#8D6527] block">{formatOrderDate(sub.createdAt)}</span>
+                        <span className="text-xs font-bold text-[#221811] block truncate">
+                          {sub.name || sub.email || 'صديقة الهدى'}
+                        </span>
+                        {sub.phone ? (
+                          <a
+                            href={whatsappLink(sub.phone)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[11px] text-[#8D6527] hover:underline block font-mono"
+                            dir="ltr"
+                          >
+                            {formatWhatsAppNumber(sub.phone)}
+                          </a>
+                        ) : (
+                          <span className="text-[11px] text-[#968B7E] block">—</span>
+                        )}
+                        <span className="text-[10px] text-[#968B7E] block">{formatOrderDate(sub.createdAt)}</span>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        onClick={() => navigator.clipboard.writeText(sub.email)}
-                        className="w-8 h-8 rounded-lg border border-[#EADBCE] hover:border-[#8D6527] text-[#685D52] hover:text-[#8D6527] flex items-center justify-center transition-colors cursor-pointer"
-                        title="نسخ الإيميل"
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                      </button>
+                      {sub.phone && (
+                        <>
+                          <a
+                            href={whatsappLink(sub.phone)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="w-8 h-8 rounded-lg border border-[#EADBCE] hover:border-emerald-400 text-[#685D52] hover:text-emerald-700 hover:bg-emerald-50 flex items-center justify-center transition-colors"
+                            title="محادثة واتساب"
+                          >
+                            <MessageCircle className="w-3.5 h-3.5" />
+                          </a>
+                          <button
+                            onClick={() => navigator.clipboard.writeText(sub.phone || '')}
+                            className="w-8 h-8 rounded-lg border border-[#EADBCE] hover:border-[#8D6527] text-[#685D52] hover:text-[#8D6527] flex items-center justify-center transition-colors cursor-pointer"
+                            title="نسخ رقم الواتساب"
+                          >
+                            <Copy className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      )}
                       {onDeleteSubscriber && (
                         <button
                           onClick={() => onDeleteSubscriber(sub.id)}

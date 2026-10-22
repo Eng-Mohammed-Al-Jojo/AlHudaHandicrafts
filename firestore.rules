@@ -24,23 +24,34 @@ service cloud.firestore {
 
     match /orders/{orderId} {
       // Visitors can submit a valid order directly from Checkout.
+      // New orders always start unpaid and pending review; only an admin can confirm payment.
       allow create: if request.resource.data.customer is string
                     && request.resource.data.phone is string
-                    && request.resource.data.total is number;
+                    && request.resource.data.total is number
+                    && request.resource.data.total >= 0
+                    && request.resource.data.status == 'جديد'
+                    && (!request.resource.data.keys().hasAny(['paymentStatus'])
+                        || request.resource.data.paymentStatus == 'pending');
       allow read, update, delete: if isAdmin();
     }
 
+    match /invoices/{invoiceId} {
+      // Manual sale/purchase invoices are created from the dashboard only.
+      allow read, write: if isAdmin();
+    }
+
     match /subscribers/{subscriberId} {
-      // Visitors may create one well-formed newsletter subscription only.
-      // Reading and managing the mailing list always stays admin-only.
+      // Visitors may join the WhatsApp friends list once with a name and number.
+      // Reading and managing the list always stays admin-only.
       allow create: if request.resource.data.keys().hasOnly([
-                      'email', 'source', 'status', 'createdAt'
+                      'name', 'phone', 'source', 'status', 'createdAt'
                     ])
-                    && request.resource.data.email is string
-                    && request.resource.data.email.size() > 3
-                    && request.resource.data.email.size() <= 254
-                    && request.resource.data.email.matches('^[^@ ]+@[^@ ]+\\.[^@ ]+$')
-                    && request.resource.data.source == 'storefront_newsletter'
+                    && request.resource.data.name is string
+                    && request.resource.data.name.size() >= 2
+                    && request.resource.data.name.size() <= 80
+                    && request.resource.data.phone is string
+                    && request.resource.data.phone.matches('^[0-9]{8,15}$')
+                    && request.resource.data.source == 'storefront_whatsapp'
                     && request.resource.data.status == 'active'
                     && request.resource.data.createdAt == request.time;
       allow read, update, delete: if isAdmin();

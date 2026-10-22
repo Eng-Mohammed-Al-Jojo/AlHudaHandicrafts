@@ -5,6 +5,8 @@ import {
   Package,
   Layers,
   ShoppingBag,
+  ReceiptText,
+  Users,
   Settings,
   LogOut,
   ExternalLink,
@@ -60,6 +62,8 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'products',   label: 'المنتجات',    icon: Package,         to: '/admin/products' },
   { id: 'categories', label: 'الأقسام',     icon: Layers,          to: '/admin/categories' },
   { id: 'orders',     label: 'الطلبات',     icon: ShoppingBag,     to: '/admin/orders' },
+  { id: 'invoices',   label: 'الفواتير',    icon: ReceiptText,     to: '/admin/invoices' },
+  { id: 'customers',  label: 'الزبائن',     icon: Users,           to: '/admin/customers' },
   {
     id: 'settings',
     label: 'الإعدادات',
@@ -313,7 +317,7 @@ export default function AdminLayout({ user, onLogout, children, unseenOrdersCoun
           (visible on < lg, hidden on lg+)
          ══════════════════════════════ */}
       <nav
-        className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-white border-t border-[#EADBCE] shadow-[0_-4px_20px_rgba(34,24,17,0.08)] flex items-center"
+        className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-white border-t border-[#EADBCE] shadow-[0_-4px_20px_rgba(34,24,17,0.08)] flex items-center overflow-x-auto"
         aria-label="التنقل السفلي"
       >
         {NAV_ITEMS.map(item => {
@@ -323,7 +327,7 @@ export default function AdminLayout({ user, onLogout, children, unseenOrdersCoun
             <Link
               key={item.id}
               to={item.to}
-              className={`flex-1 flex flex-col items-center justify-center py-2.5 gap-1 no-underline transition-all ${
+              className={`flex-1 min-w-[64px] flex flex-col items-center justify-center py-2.5 gap-1 no-underline transition-all ${
                 active ? 'text-[#8D6527]' : 'text-[#968B7E]'
               }`}
             >

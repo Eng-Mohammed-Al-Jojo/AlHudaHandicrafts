@@ -1,8 +1,9 @@
-import { useEffect, useState, useMemo } from 'react'
-import { Search, X, Sparkles, SlidersHorizontal, ArrowLeft } from 'lucide-react'
+import { useEffect, useRef, useState, useMemo } from 'react'
+import { Search, X, Sparkles, SlidersHorizontal, ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react'
 import type { Product, Category } from '../../types'
 import ProductCard from './ProductCard'
 import ProductModal from './ProductModal'
+import SelectMenu from '../ui/SelectMenu'
 
 interface Props {
   products: Product[]
@@ -22,6 +23,21 @@ const SORT_OPTIONS = [
   { value: 'name', label: 'الترتيب الأبجدي' },
 ]
 
+const PAGE_SIZE = 8
+
+function pageItems(total: number, current: number): Array<number | '…'> {
+  if (total <= 7) return Array.from({ length: total }, (_, index) => index + 1)
+  const pages = new Set<number>([1, total, current - 1, current, current + 1])
+  if (current <= 3) [2, 3, 4].forEach(page => pages.add(page))
+  if (current >= total - 2) [total - 1, total - 2, total - 3].forEach(page => pages.add(page))
+  const sorted = [...pages].filter(page => page >= 1 && page <= total).sort((a, b) => a - b)
+  return sorted.reduce<Array<number | '…'>>((items, page, index) => {
+    if (index > 0 && page - sorted[index - 1] > 1) items.push('…')
+    items.push(page)
+    return items
+  }, [])
+}
+
 export default function ProductGrid({
   products,
   categories,
@@ -35,19 +51,23 @@ export default function ProductGrid({
   const [query, setQuery] = useState(initialQuery)
   const [selectedCat, setSelectedCat] = useState(initialCategory)
   const [sort, setSort] = useState('newest')
+  const [page, setPage] = useState(1)
   const [quickView, setQuickView] = useState<Product | null>(null)
+  const sectionRef = useRef<HTMLElement>(null)
 
   // The same page instance stays mounted when only its URL query changes.
   // Keep filter state in sync when a shopper opens another category or search.
   useEffect(() => {
     setSelectedCat(initialCategory)
+    setPage(1)
   }, [initialCategory])
 
   useEffect(() => {
     setQuery(initialQuery)
+    setPage(1)
   }, [initialQuery])
 
-  const published = products.filter(p => p.isPublished)
+  const published = useMemo(() => products.filter(p => p.isPublished), [products])
 
   const filtered = useMemo(() => {
     let list = published
@@ -68,10 +88,30 @@ export default function ProductGrid({
     }
   }, [published, selectedCat, query, sort])
 
-  const displayList = featured ? filtered.slice(0, 8) : filtered
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const currentPage = Math.min(page, totalPages)
+  const startIndex = (currentPage - 1) * PAGE_SIZE
+  const displayList = filtered.slice(startIndex, startIndex + PAGE_SIZE)
+
+  useEffect(() => {
+    setPage(1)
+  }, [selectedCat, query, sort])
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages)
+  }, [page, totalPages])
+
+  function goToPage(nextPage: number) {
+    const target = Math.min(Math.max(1, nextPage), totalPages)
+    if (target === currentPage) return
+    setPage(target)
+    window.requestAnimationFrame(() => {
+      sectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }
 
   return (
-    <section className={`py-20 ${featured ? 'bg-[#FAF7F2]' : 'bg-white'}`} id="products">
+    <section ref={sectionRef} className={`py-20 ${featured ? 'bg-[#FAF7F2]' : 'bg-white'}`} id="products">
       <div className="container">
         
         {/* Section Heading */}
@@ -109,13 +149,13 @@ export default function ProductGrid({
               <Search className="w-4 h-4 text-[#8D6527] shrink-0" />
               <input
                 value={query}
-                onChange={e => setQuery(e.target.value)}
+                onChange={e => { setQuery(e.target.value); setPage(1) }}
                 placeholder="ابحثي عن قطعة أو تصميم..."
                 className="border-0 outline-none flex-1 text-xs text-[#221811] placeholder-[#968B7E] bg-transparent"
               />
               {query && (
                 <button
-                  onClick={() => setQuery('')}
+                  onClick={() => { setQuery(''); setPage(1) }}
                   className="text-[#968B7E] hover:text-[#221811] p-0.5"
                   aria-label="مسح البحث"
                 >
@@ -127,7 +167,7 @@ export default function ProductGrid({
             {/* Category Filter Pills */}
             <div className="flex flex-wrap items-center gap-2 overflow-x-auto pb-1 lg:pb-0">
               <button
-                onClick={() => setSelectedCat('')}
+                onClick={() => { setSelectedCat(''); setPage(1) }}
                 className={`px-4 py-2 rounded-full text-xs font-semibold transition-all ${
                   !selectedCat
                     ? 'bg-[#8D6527] text-white shadow-xs'
@@ -139,7 +179,7 @@ export default function ProductGrid({
               {categories.filter(c => c.isVisible).map(cat => (
                 <button
                   key={cat.id}
-                  onClick={() => setSelectedCat(cat.id === selectedCat ? '' : cat.id)}
+                  onClick={() => { setSelectedCat(cat.id === selectedCat ? '' : cat.id); setPage(1) }}
                   className={`px-4 py-2 rounded-full text-xs font-semibold transition-all whitespace-nowrap ${
                     selectedCat === cat.id
                       ? 'bg-[#8D6527] text-white shadow-xs'
@@ -154,34 +194,37 @@ export default function ProductGrid({
             {/* Sort Dropdown */}
             <div className="flex items-center gap-2">
               <SlidersHorizontal className="w-4 h-4 text-[#8D6527] shrink-0 hidden sm:block" />
-              <select
+              <SelectMenu
                 value={sort}
-                onChange={e => setSort(e.target.value)}
-                className="w-full sm:w-auto bg-[#FAF7F2] border border-[#EADBCE] text-[#221811] text-xs font-medium rounded-full px-4 py-2.5 outline-none focus:border-[#C59B4B] cursor-pointer"
-              >
-                {SORT_OPTIONS.map(o => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
+                options={SORT_OPTIONS}
+                onChange={value => { setSort(value); setPage(1) }}
+                variant="store"
+                className="w-full sm:w-auto"
+                menuMinWidth={220}
+                ariaLabel="ترتيب المنتجات"
+              />
             </div>
 
           </div>
         </div>
 
         {/* Results Counter */}
-        <div className="flex items-center justify-between text-xs text-[#685D52] mb-6 px-1">
-          <span>
+        <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-[#685D52] mb-6 px-1">
+          <span className="flex flex-wrap items-center gap-2">
             {filtered.length > 0 ? (
               <>يتم عرض <strong className="text-[#221811]">{displayList.length}</strong> من إجمالي <strong className="text-[#221811]">{filtered.length}</strong> منتج</>
             ) : null}
             {selectedCat && ` في قسم «${categories.find(c => c.id === selectedCat)?.name}»`}
+            {filtered.length > 0 && totalPages > 1 && (
+              <span className="text-[#968B7E]">
+                — الصفحة <strong className="text-[#221811]">{currentPage}</strong> من <strong className="text-[#221811]">{totalPages}</strong>
+              </span>
+            )}
           </span>
 
           {(query || selectedCat) && (
             <button
-              onClick={() => { setQuery(''); setSelectedCat('') }}
+              onClick={() => { setQuery(''); setSelectedCat(''); setPage(1) }}
               className="text-[#8D6527] hover:underline font-medium text-xs"
             >
               إلغاء الفلاتر والبحث
@@ -213,12 +256,60 @@ export default function ProductGrid({
               جرّبي تغيير كلمات البحث أو استعراض قسم آخر من أقسام التطريز الفاخرة لدينا.
             </p>
             <button
-              onClick={() => { setQuery(''); setSelectedCat('') }}
+              onClick={() => { setQuery(''); setSelectedCat(''); setPage(1) }}
               className="rounded-full bg-[#8D6527] hover:bg-[#704F1E] text-white px-6 py-2.5 text-xs font-semibold transition-all shadow-sm"
             >
               عرض جميع المنتجات
             </button>
           </div>
+        )}
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <nav aria-label="التنقل بين صفحات المنتجات" className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <button
+              type="button"
+              onClick={() => goToPage(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="inline-flex items-center gap-1.5 rounded-full border border-[#EADBCE] bg-white px-4 py-2 text-xs font-bold text-[#685D52] transition-all hover:border-[#C59B4B] hover:text-[#8D6527] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <ChevronRight className="w-4 h-4" />
+              السابق
+            </button>
+
+            <div className="flex flex-wrap items-center justify-center gap-1.5">
+              {pageItems(totalPages, currentPage).map((item, index) =>
+                item === '…' ? (
+                  <span key={`ellipsis-${index}`} className="px-2 text-xs text-[#968B7E]">…</span>
+                ) : (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => goToPage(item)}
+                    aria-label={`الصفحة ${item}`}
+                    aria-current={item === currentPage ? 'page' : undefined}
+                    className={`w-9 h-9 rounded-full text-xs font-bold transition-all ${
+                      item === currentPage
+                        ? 'bg-[#8D6527] text-white shadow-xs'
+                        : 'border border-[#EADBCE] bg-white text-[#685D52] hover:border-[#C59B4B] hover:text-[#8D6527]'
+                    }`}
+                  >
+                    {item}
+                  </button>
+                )
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => goToPage(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="inline-flex items-center gap-1.5 rounded-full border border-[#EADBCE] bg-white px-4 py-2 text-xs font-bold text-[#685D52] transition-all hover:border-[#C59B4B] hover:text-[#8D6527] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              التالي
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+          </nav>
         )}
 
         {/* Quick View Modal */}

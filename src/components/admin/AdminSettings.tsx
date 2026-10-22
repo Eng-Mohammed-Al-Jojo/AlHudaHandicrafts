@@ -333,7 +333,7 @@ export default function AdminSettings({ settings, onSave, notify }: Props) {
   async function handleBackup() {
     setBackingUp(true)
     try {
-      const colNames = ['products', 'categories', 'orders', 'settings', 'subscribers']
+      const colNames = ['products', 'categories', 'orders', 'invoices', 'settings', 'subscribers']
       const backup: Record<string, unknown[]> = {}
       await Promise.all(
         colNames.map(async name => {
@@ -377,7 +377,7 @@ export default function AdminSettings({ settings, onSave, notify }: Props) {
       return
     }
 
-    const knownCols = ['products', 'categories', 'orders', 'settings', 'subscribers']
+    const knownCols = ['products', 'categories', 'orders', 'invoices', 'settings', 'subscribers']
     const hasAtLeastOne = knownCols.some(c => Array.isArray(data[c]))
     if (!hasAtLeastOne) {
       notify('لم يتم التعرف على محتوى الملف. تأكدي أنه ملف نسخة احتياطية صحيح من نظام الهدى.', 'error')
@@ -1135,7 +1135,7 @@ export default function AdminSettings({ settings, onSave, notify }: Props) {
                   </div>
                 </div>
                 <p className="text-xs text-emerald-800 leading-relaxed m-0">
-                  سيتم تنزيل ملف يحتوي على المنتجات، الأقسام، الطلبات، إعدادات المتجر، وقائمة المشتركين. احتفظي بهذا الملف في مكان آمن دورياً.
+                  سيتم تنزيل ملف يحتوي على المنتجات، الأقسام، الطلبات، الفواتير، إعدادات المتجر، وقائمة أصدقاء الهدى (واتساب). احتفظي بهذا الملف في مكان آمن دورياً.
                 </p>
                 <button
                   type="button"

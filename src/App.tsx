@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import './index.css'
 
-import type { FirebaseUser, Product, Category, Order, OrderStatus, SiteSettings, NewsletterSubscriber } from './types'
+import type { FirebaseUser, Product, Category, Order, OrderStatus, PaymentStatus, SiteSettings, NewsletterSubscriber, Invoice, InvoiceDraft, InvoiceSignature } from './types'
 import { DEFAULT_SITE_SETTINGS } from './types'
 import { MOCK_PRODUCTS, MOCK_CATEGORIES } from './data'
 
@@ -23,6 +23,10 @@ import {
   updateOrderStatusInFirestore,
   updateOrderInFirestore,
   deleteOrderFromFirestore,
+  subscribeToInvoices,
+  addInvoiceToFirestore,
+  updateInvoiceInFirestore,
+  deleteInvoiceFromFirestore,
   seedInitialDatabase,
   clearAllFirestoreData
 } from './firebase'
@@ -49,6 +53,8 @@ import AdminOverview from './components/admin/AdminOverview'
 import AdminProducts from './components/admin/AdminProducts'
 import AdminCategories from './components/admin/AdminCategories'
 import AdminOrders from './components/admin/AdminOrders'
+import AdminInvoices from './components/admin/AdminInvoices'
+import AdminCustomers from './components/admin/AdminCustomers'
 import AdminLogin from './components/admin/AdminLogin'
 import AdminSettings from './components/admin/AdminSettings'
 import CheckoutModal from './components/store/CheckoutModal'
@@ -193,6 +199,7 @@ export default function App() {
   const knownOrderIdsRef = useRef<Set<string> | null>(null)
   const [unseenOrdersCount, setUnseenOrdersCount] = useState(0)
   const [subscribers, setSubscribers] = useState<NewsletterSubscriber[]>([])
+  const [invoices, setInvoices] = useState<Invoice[]>([])
   const [dbConnected, setDbConnected] = useState(false)
   const [isLoadingInitialData, setIsLoadingInitialData] = useState(true)
   const [settings, setSettings] = useState<SiteSettings>(DEFAULT_SITE_SETTINGS)
@@ -275,6 +282,7 @@ export default function App() {
       setOrdersLoaded(false)
       knownOrderIdsRef.current = null
       setSubscribers([])
+      setInvoices([])
       return
     }
     const unsubOrders = subscribeToOrders(
@@ -292,12 +300,20 @@ export default function App() {
       setSubscribers,
       (err) => {
         console.error('Subscribers listener error:', err)
-        notify('تعذر تحميل المشتركات: تأكدي من نشر قواعد Firestore وتسجيل الدخول ببريد huda@gmail.com.', 'error')
+        notify('تعذر تحميل قائمة أصدقاء الهدى: تأكدي من نشر قواعد Firestore وتسجيل الدخول ببريد huda@gmail.com.', 'error')
+      }
+    )
+    const unsubInvoices = subscribeToInvoices(
+      setInvoices,
+      (err) => {
+        console.error('Invoices listener error:', err)
+        notify('تعذر تحميل الفواتير: تأكدي من نشر قواعد Firestore.', 'error')
       }
     )
     return () => {
       unsubOrders()
       unsubSubscribers()
+      unsubInvoices()
     }
   }, [authReady, adminUser?.email])
 
@@ -320,11 +336,36 @@ export default function App() {
     try {
       await deleteSubscriberFromFirestore(id)
       setSubscribers(prev => prev.filter(s => s.id !== id))
-      notify('تم حذف المشتركة من القائمة بنجاح')
+      notify('تم حذف الصديقة من القائمة بنجاح')
     } catch (err) {
       console.error('Delete subscriber error:', err)
-      notify('تعذر حذف المشتركة', 'error')
+      notify('تعذر حذف الصديقة', 'error')
     }
+  }
+
+  // ─── Invoices ─────────────────────────────────────────────────────────────────
+  async function handleAddInvoice(draft: InvoiceDraft): Promise<Invoice> {
+    const id = await addInvoiceToFirestore(draft)
+    const invoice: Invoice = { ...draft, id, createdAt: draft.createdAt || new Date().toISOString() }
+    setInvoices(prev => [invoice, ...prev])
+    return invoice
+  }
+
+  async function handleUpdateInvoice(invoice: Invoice): Promise<void> {
+    const { id, ...draft } = invoice
+    await updateInvoiceInFirestore(id, draft)
+    setInvoices(prev => prev.map(item => item.id === id ? { ...draft, id, updatedAt: new Date().toISOString() } : item))
+  }
+
+  async function handleDeleteInvoice(id: string): Promise<void> {
+    await deleteInvoiceFromFirestore(id)
+    setInvoices(prev => prev.filter(invoice => invoice.id !== id))
+  }
+
+  async function handleSaveInvoiceSignature(signature: InvoiceSignature): Promise<void> {
+    const next: SiteSettings = { ...settings, invoiceSignature: signature }
+    await updateSiteSettings(next)
+    setSettings(next)
   }
 
 
@@ -550,14 +591,21 @@ export default function App() {
   // Orders
   async function handleUpdateOrderStatus(id: string, status: OrderStatus): Promise<void> {
     const currentOrder = orders.find(order => order.id === id)
-    if (status === 'مكتمل' && currentOrder?.status !== 'مكتمل' && currentOrder?.paymentStatus !== 'paid') {
+    const nextPaymentStatus: PaymentStatus =
+      status === 'ملغي'
+        ? 'cancelled'
+        : currentOrder?.paymentStatus === 'cancelled'
+          ? 'pending'
+          : currentOrder?.paymentStatus ?? 'pending'
+
+    if (status === 'مكتمل' && currentOrder?.status !== 'مكتمل' && nextPaymentStatus !== 'paid') {
       notify('لا يمكن تغيير الطلب إلى «مكتمل» قبل تأكيد الدفع من نافذة الدفع.', 'error')
       return
     }
     try {
-      await updateOrderStatusInFirestore(id, status)
-      setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o))
-      notify(`تم تحديث حالة الطلب إلى "${status}" في قاعدة البيانات`)
+      await updateOrderStatusInFirestore(id, status, nextPaymentStatus)
+      setOrders(prev => prev.map(o => o.id === id ? { ...o, status, paymentStatus: nextPaymentStatus } : o))
+      notify(`تم تحديث حالة الطلب إلى "${status}" في قاعدة البيانات${status === 'ملغي' ? ' وإلغاء حالة الدفع' : ''}`)
     } catch (err) {
       console.error('Update order status error:', err)
       notify(getFirestoreWriteErrorMessage(err, 'تحديث حالة الطلب'), 'error')
@@ -567,14 +615,24 @@ export default function App() {
 
   async function handleUpdateOrder(order: Order) {
     const currentOrder = orders.find(item => item.id === order.id)
-    if (order.status === 'مكتمل' && currentOrder?.status !== 'مكتمل' && order.paymentStatus !== 'paid') {
+    const nextPaymentStatus: PaymentStatus =
+      order.status === 'ملغي'
+        ? 'cancelled'
+        : order.paymentStatus === 'paid'
+          ? 'paid'
+          : currentOrder?.paymentStatus === 'cancelled'
+            ? 'pending'
+            : order.paymentStatus ?? currentOrder?.paymentStatus ?? 'pending'
+    const normalizedOrder: Order = { ...order, paymentStatus: nextPaymentStatus }
+
+    if (normalizedOrder.status === 'مكتمل' && currentOrder?.status !== 'مكتمل' && normalizedOrder.paymentStatus !== 'paid') {
       const message = 'يجب تأكيد الدفع قبل تحويل الطلب إلى «مكتمل».'
       notify(message, 'error')
       throw new Error(message)
     }
     try {
-      await updateOrderInFirestore(order.id, order)
-      setOrders(prev => prev.map(item => item.id === order.id ? order : item))
+      await updateOrderInFirestore(normalizedOrder.id, normalizedOrder)
+      setOrders(prev => prev.map(item => item.id === normalizedOrder.id ? normalizedOrder : item))
       notify('تم حفظ تعديلات الطلب في قاعدة البيانات')
     } catch (err) {
       console.error('Update order error:', err)
@@ -696,6 +754,7 @@ export default function App() {
                 <AdminOverview
                   products={products}
                   orders={orders}
+                  invoices={invoices}
                   categoriesCount={categories.length}
                   subscribers={subscribers}
                   onDeleteSubscriber={handleDeleteSubscriber}
@@ -752,12 +811,46 @@ export default function App() {
               <AdminLayout user={adminUser!} onLogout={handleAdminLogout} unseenOrdersCount={unseenOrdersCount} onClearUnseenOrders={() => setUnseenOrdersCount(0)}>
                 <AdminOrders
                   orders={orders}
+                  invoices={invoices}
+                  products={products}
                   settings={settings}
                   onUpdateStatus={handleUpdateOrderStatus}
                   onUpdate={handleUpdateOrder}
                   onDelete={handleDeleteOrder}
+                  onAddInvoice={handleAddInvoice}
+                  onUpdateInvoice={handleUpdateInvoice}
+                  onPersistSignature={handleSaveInvoiceSignature}
                   notify={(msg, type) => notify(msg, type ?? 'success')}
                 />
+              </AdminLayout>
+            </AdminGuard>
+          }
+        />
+        <Route
+          path="/admin/invoices"
+          element={
+            <AdminGuard user={adminUser} ready={authReady}>
+              <AdminLayout user={adminUser!} onLogout={handleAdminLogout} unseenOrdersCount={unseenOrdersCount}>
+                <AdminInvoices
+                  invoices={invoices}
+                  products={products}
+                  settings={settings}
+                  onAdd={handleAddInvoice}
+                  onUpdate={handleUpdateInvoice}
+                  onDelete={handleDeleteInvoice}
+                  onPersistSignature={handleSaveInvoiceSignature}
+                  notify={(msg, type) => notify(msg, type ?? 'success')}
+                />
+              </AdminLayout>
+            </AdminGuard>
+          }
+        />
+        <Route
+          path="/admin/customers"
+          element={
+            <AdminGuard user={adminUser} ready={authReady}>
+              <AdminLayout user={adminUser!} onLogout={handleAdminLogout} unseenOrdersCount={unseenOrdersCount}>
+                <AdminCustomers orders={orders} invoices={invoices} />
               </AdminLayout>
             </AdminGuard>
           }

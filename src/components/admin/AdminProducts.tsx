@@ -18,6 +18,7 @@ import {
 import type { Product, Category, FirebaseUser } from '../../types'
 import { uploadProductImage } from '../../firebase'
 import Modal from '../ui/Modal'
+import SelectMenu from '../ui/SelectMenu'
 
 interface Props {
   products: Product[]
@@ -492,15 +493,15 @@ export default function AdminProducts({
                         <label className="block text-xs font-semibold text-[#221811] mb-1.5">
                           القسم <span className="text-red-500">*</span>
                         </label>
-                        <select
+                        <SelectMenu
                           value={draft.categoryId}
-                          onChange={e => setDraft(d => ({ ...d, categoryId: e.target.value }))}
-                          className="w-full bg-[#FAF7F2] border border-[#EADBCE] rounded-xl px-3 py-2.5 text-sm text-[#221811] outline-none focus:border-[#8D6527] focus:bg-white transition-all cursor-pointer"
-                        >
-                          {categories.map(c => (
-                            <option key={c.id} value={c.id}>{c.name}</option>
-                          ))}
-                        </select>
+                          options={categories.map(category => ({ value: category.id, label: category.name }))}
+                          onChange={categoryId => setDraft(d => ({ ...d, categoryId }))}
+                          placeholder="اختاري القسم"
+                          variant="admin"
+                          className="w-full"
+                          ariaLabel="القسم"
+                        />
                       </div>
                     </div>
 

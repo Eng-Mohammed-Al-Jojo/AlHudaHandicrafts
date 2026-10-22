@@ -1,17 +1,33 @@
 import { useMemo, useState, type FormEvent } from 'react'
-import { CalendarDays, CheckCircle2, CreditCard, Download, FilePenLine, Filter, LayoutGrid, List, MessageCircle, Phone, ReceiptText, Search, Send, Share2, ShoppingBag, Sparkles, Trash2, X } from 'lucide-react'
-import type { Order, OrderStatus, PaymentMethod, PaymentMethodId, SiteSettings } from '../../types'
+import { CalendarDays, CheckCircle2, CreditCard, Download, FilePenLine, Filter, ImageDown, LayoutGrid, List, Loader2, MessageCircle, Phone, Printer, ReceiptText, Search, Send, ShoppingBag, Sparkles, Trash2, X } from 'lucide-react'
+import type { Invoice, InvoiceDraft, InvoiceSignature, Order, OrderStatus, PaymentMethod, PaymentMethodId, Product, SiteSettings } from '../../types'
 import Modal from '../ui/Modal'
+import SelectMenu, { type SelectOption } from '../ui/SelectMenu'
 import AdminSelect from './AdminSelect'
+import InvoiceEditor from './InvoiceEditor'
 import { exportOrdersToExcel } from '../../utils/orderExport'
-import { createInvoiceImage, downloadInvoiceImage } from '../../utils/invoice'
+import {
+  buildInvoiceShareText,
+  buildManualInvoiceHtml,
+  createManualInvoiceImage,
+  downloadManualInvoiceImage,
+  invoiceDateLabel,
+  invoiceWhatsAppLink,
+  nextInvoiceNumber,
+  printManualInvoice,
+} from '../../utils/manualInvoice'
 
 interface Props {
   orders: Order[]
+  invoices: Invoice[]
+  products: Product[]
   settings: SiteSettings
   onUpdateStatus: (id: string, status: OrderStatus) => Promise<void>
   onUpdate: (order: Order) => Promise<void>
   onDelete: (id: string) => Promise<void>
+  onAddInvoice: (draft: InvoiceDraft) => Promise<Invoice>
+  onUpdateInvoice: (invoice: Invoice) => Promise<void>
+  onPersistSignature?: (signature: InvoiceSignature) => Promise<void>
   notify: (msg: string, type?: 'success' | 'error') => void
 }
 
@@ -20,6 +36,18 @@ const STATUS_COLOR: Record<OrderStatus, string> = {
   'جديد': 'bg-amber-50 text-amber-900 border-amber-200', 'قيد التجهيز': 'bg-blue-50 text-blue-900 border-blue-200',
   'تم التواصل': 'bg-purple-50 text-purple-900 border-purple-200', 'مكتمل': 'bg-emerald-50 text-emerald-900 border-emerald-200', 'ملغي': 'bg-red-50 text-red-900 border-red-200',
 }
+const STATUS_DOT: Record<OrderStatus, string> = {
+  'جديد': 'bg-amber-500',
+  'قيد التجهيز': 'bg-blue-500',
+  'تم التواصل': 'bg-purple-500',
+  'مكتمل': 'bg-emerald-500',
+  'ملغي': 'bg-red-500',
+}
+const STATUS_OPTIONS: SelectOption[] = ALL_STATUSES.map(status => ({
+  value: status,
+  label: status,
+  icon: <span className={`w-2 h-2 shrink-0 rounded-full ${STATUS_DOT[status]}`} />,
+}))
 type DateFilter = 'today' | 'all' | 'range'
 type ViewMode = 'table' | 'cards'
 
@@ -53,13 +81,18 @@ function formatIls(value: number) {
   return `${value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₪`
 }
 
-function getOrderLocation(order: Order) {
-  return [order.governorate, order.city].filter(Boolean).join('، ') || order.address || ''
+function paymentStatusView(order: Pick<Order, 'status' | 'paymentStatus'>) {
+  if (order.status === 'ملغي') {
+    return { label: 'ملغاة', text: 'text-red-700', box: 'border-red-200 bg-red-50 text-red-800' }
+  }
+  if (order.paymentStatus === 'paid') {
+    return { label: 'مؤكد', text: 'text-emerald-700', box: 'border-emerald-200 bg-emerald-50 text-emerald-800' }
+  }
+  return { label: 'بانتظار التأكيد', text: 'text-amber-700', box: 'border-amber-200 bg-amber-50 text-amber-900' }
 }
 
-function getShippingStatus(order: Order): 'free' | 'standard' {
-  if (order.shippingStatus === 'free' || order.shippingStatus === 'standard') return order.shippingStatus
-  return order.notes?.includes('شحن مجاني') ? 'free' : 'standard'
+function getOrderLocation(order: Order) {
+  return [order.governorate, order.city].filter(Boolean).join('، ') || order.address || ''
 }
 
 function getWhatsAppNumber(phone?: string) {
@@ -92,41 +125,7 @@ function buildPaymentConfirmationMessage(order: Order, method: PaymentMethod) {
   ].join('\n')
 }
 
-function buildInvoiceText(order: Order, settings: SiteSettings) {
-  const invoiceNumber = `INV-${order.id.slice(0, 8).toUpperCase()}`
-  const itemLines = order.items.map(item => {
-    const quantity = item.quantity ?? 1
-    return `- ${item.productName} × ${quantity} — ${formatIls(item.price * quantity)}`
-  }).join('\n')
-  const shippingStatus = getShippingStatus(order)
-  const displayCurrency = formatOrderCurrency(order)
-  const location = [order.governorate, order.city, order.address].filter(Boolean).join('، ')
-
-  return [
-    `فاتورة ${settings.storeName}`,
-    `رقم الفاتورة: ${invoiceNumber}`,
-    `رقم الطلب: #${order.id.slice(0, 8)}`,
-    `التاريخ: ${formatDate(order.createdAt)}`,
-    '',
-    'بيانات العميلة:',
-    `الاسم: ${order.customer}`,
-    `الجوال: ${order.phone ?? ''}`,
-    ...(order.email ? [`البريد الإلكتروني: ${order.email}`] : []),
-    ...(location ? [`العنوان: ${location}`] : []),
-    '',
-    'المنتجات:',
-    itemLines || 'لا توجد منتجات',
-    '',
-    `الإجمالي الأساسي: ${formatIls(order.total)}`,
-    ...(displayCurrency ? [`${displayCurrency}`] : []),
-    `الشحن: ${shippingStatus === 'free' ? 'مجاني' : 'عادي — يتم التنسيق مع العميلة'}`,
-    ...(order.shippingThreshold !== undefined ? [`حد الشحن المجاني: ${formatIls(order.shippingThreshold)}`] : []),
-    ...(order.deliveryNotes ? [`ملاحظات التوصيل: ${order.deliveryNotes}`] : []),
-    ...(order.notes ? [`ملاحظات: ${order.notes}`] : []),
-  ].join('\n')
-}
-
-export default function AdminOrders({ orders, settings, onUpdateStatus, onUpdate, onDelete, notify }: Props) {
+export default function AdminOrders({ orders, invoices, products, settings, onUpdateStatus, onUpdate, onDelete, onAddInvoice, onUpdateInvoice, onPersistSignature, notify }: Props) {
   const [statusFilter, setStatusFilter] = useState<'الكل' | OrderStatus>('الكل')
   const [dateFilter, setDateFilter] = useState<DateFilter>('today')
   const [fromDate, setFromDate] = useState(todayKey())
@@ -249,7 +248,20 @@ export default function AdminOrders({ orders, settings, onUpdateStatus, onUpdate
 
     {editingOrder && <OrderEditor order={editingOrder} onClose={() => setEditingOrder(null)} onSave={async order => { await onUpdate(order); setEditingOrder(null) }} />}
     {deletingOrder && <Modal onClose={() => !isDeleting && setDeletingOrder(null)} size="sm"><div className="p-6 sm:p-8"><div className="flex items-center gap-3 text-red-800"><div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center"><Trash2 className="w-5 h-5" /></div><h2 className="font-serif text-xl m-0">حذف الطلب</h2></div><p className="text-sm text-[#685D52] leading-relaxed mt-5">هل تريدين حذف طلب <strong>{deletingOrder.customer}</strong> نهائياً؟ لا يمكن استرجاعه بعد الحذف.</p><div className="flex justify-end gap-2 mt-6"><button disabled={isDeleting} onClick={() => setDeletingOrder(null)} className="px-4 py-2.5 rounded-xl text-xs font-bold text-[#685D52] hover:bg-[#FAF7F2]">إلغاء</button><button disabled={isDeleting} onClick={confirmDelete} className="px-4 py-2.5 rounded-xl text-xs font-bold bg-red-700 hover:bg-red-800 text-white disabled:opacity-60">{isDeleting ? 'جارٍ الحذف...' : 'حذف نهائياً'}</button></div></div></Modal>}
-    {invoiceOrder && <InvoiceModal order={invoiceOrder} settings={settings} notify={notify} onClose={() => setInvoiceOrder(null)} />}
+    {invoiceOrder && (
+      <OrderInvoiceModal
+        order={invoiceOrder}
+        existingInvoice={invoices.find(invoice => invoice.orderId === invoiceOrder.id) ?? null}
+        invoices={invoices}
+        products={products}
+        settings={settings}
+        onAdd={onAddInvoice}
+        onUpdate={onUpdateInvoice}
+        onPersistSignature={onPersistSignature}
+        notify={notify}
+        onClose={() => setInvoiceOrder(null)}
+      />
+    )}
      {paymentOrder && <PaymentConfirmationModal order={paymentOrder} settings={settings} busy={isConfirmingPayment} onClose={() => !isConfirmingPayment && setPaymentOrder(null)} onConfirm={confirmPayment} />}
   </div>
 }
@@ -349,101 +361,200 @@ function PaymentConfirmationModal({ order, settings, busy, onClose, onConfirm }:
 
 function OrderRow({ order, onUpdateStatus, onEdit, onDelete, onOpenInvoice, onConfirmPayment, updatingStatus }: { order: Order; onUpdateStatus: (id: string, status: OrderStatus) => void; onEdit: () => void; onDelete: () => void; onOpenInvoice: () => void; onConfirmPayment: () => void; updatingStatus: boolean }) {
   const cleanPhone = (order.phone || '').replace(/[^\d+]/g, '')
-  return <tr className="hover:bg-[#FAF7F2]/70 transition-colors align-top"><td className="px-4 py-4 text-xs text-[#685D52]" dir="ltr">#{order.id.slice(0, 8)}</td><td className="px-4 py-4 text-xs text-[#685D52] whitespace-nowrap"><span className="flex items-center gap-1.5"><CalendarDays className="w-3.5 h-3.5 text-[#8D6527]" />{formatDate(order.createdAt)}</span></td><td className="px-4 py-4"><strong className="block text-sm text-[#221811] mb-1">{order.customer}</strong>{order.phone && <div className="flex items-center gap-1.5 text-xs text-[#685D52]" dir="ltr"><Phone className="w-3.5 h-3.5 text-[#8D6527]" />{order.phone}{cleanPhone && <a href={`https://wa.me/${cleanPhone}`} target="_blank" rel="noopener noreferrer" className="text-emerald-700 mr-1" title="فتح واتساب"><MessageCircle className="w-4 h-4" /></a>}</div>}{getOrderLocation(order) && <div className="text-[10px] text-[#685D52] mt-1">{getOrderLocation(order)}</div>}</td><td className="px-4 py-4 max-w-75"><div className="text-xs text-[#221811] leading-6">{formatOrderItems(order) || '—'}</div>{order.notes && <p className="text-[11px] text-[#8D6527] mt-1 mb-0 line-clamp-2">{order.notes}</p>}</td><td className="px-4 py-4 whitespace-nowrap"><strong className="text-sm text-[#8D6527]">{order.total} ش</strong><span className="block text-[11px] text-[#968B7E] mt-1">{order.itemsCount} قطع</span>{(order.paymentMethodLabel || order.requestedPaymentMethod) && <span className={`block text-[10px] mt-1 ${order.paymentStatus === 'paid' ? 'text-emerald-700' : 'text-amber-700'}`}>الدفع: {order.paymentMethodLabel || 'طريقة محددة'} — {order.paymentStatus === 'paid' ? 'مؤكد' : 'بانتظار التأكيد'}</span>}{formatOrderCurrency(order) && <span className="block text-[10px] text-[#8D6527] mt-1 whitespace-normal">{formatOrderCurrency(order)}</span>}</td><td className="px-4 py-4"><select value={order.status} onChange={event => onUpdateStatus(order.id, event.target.value as OrderStatus)} disabled={updatingStatus} className={`border rounded-xl px-2.5 py-2 text-xs font-bold outline-none disabled:opacity-60 disabled:cursor-wait ${updatingStatus ? 'cursor-wait' : 'cursor-pointer'} ${STATUS_COLOR[order.status]}`}>{ALL_STATUSES.map(status => <option key={status} value={status}>{status}</option>)}</select></td><td className="px-4 py-4"><div className="flex items-center gap-2">{order.paymentStatus !== 'paid' && <button onClick={onConfirmPayment} className="w-8 h-8 rounded-lg text-emerald-700 hover:bg-emerald-50 flex items-center justify-center" title="تأكيد الدفع"><CreditCard className="w-4 h-4" /></button>}<button onClick={onEdit} className="w-8 h-8 rounded-lg text-[#8D6527] hover:bg-[#F7F1E5] flex items-center justify-center" title="تعديل الطلب"><FilePenLine className="w-4 h-4" /></button><button onClick={onOpenInvoice} className="w-8 h-8 rounded-lg text-emerald-700 hover:bg-emerald-50 flex items-center justify-center" title="إصدار فاتورة"><ReceiptText className="w-4 h-4" /></button><button onClick={onDelete} className="w-8 h-8 rounded-lg text-red-700 hover:bg-red-50 flex items-center justify-center" title="حذف الطلب"><Trash2 className="w-4 h-4" /></button></div></td></tr>
+  const payment = paymentStatusView(order)
+  return <tr className="hover:bg-[#FAF7F2]/70 transition-colors align-top"><td className="px-4 py-4 text-xs text-[#685D52]" dir="ltr">#{order.id.slice(0, 8)}</td><td className="px-4 py-4 text-xs text-[#685D52] whitespace-nowrap"><span className="flex items-center gap-1.5"><CalendarDays className="w-3.5 h-3.5 text-[#8D6527]" />{formatDate(order.createdAt)}</span></td><td className="px-4 py-4"><strong className="block text-sm text-[#221811] mb-1">{order.customer}</strong>{order.phone && <div className="flex items-center gap-1.5 text-xs text-[#685D52]" dir="ltr"><Phone className="w-3.5 h-3.5 text-[#8D6527]" />{order.phone}{cleanPhone && <a href={`https://wa.me/${cleanPhone}`} target="_blank" rel="noopener noreferrer" className="text-emerald-700 mr-1" title="فتح واتساب"><MessageCircle className="w-4 h-4" /></a>}</div>}{getOrderLocation(order) && <div className="text-[10px] text-[#685D52] mt-1">{getOrderLocation(order)}</div>}</td><td className="px-4 py-4 max-w-75"><div className="text-xs text-[#221811] leading-6">{formatOrderItems(order) || '—'}</div>{order.notes && <p className="text-[11px] text-[#8D6527] mt-1 mb-0 line-clamp-2">{order.notes}</p>}</td><td className="px-4 py-4 whitespace-nowrap"><strong className="text-sm text-[#8D6527]">{order.total} ش</strong><span className="block text-[11px] text-[#968B7E] mt-1">{order.itemsCount} قطع</span>{(order.paymentMethodLabel || order.requestedPaymentMethod) && <span className={`block text-[10px] mt-1 ${payment.text}`}>الدفع: {order.paymentMethodLabel || 'طريقة محددة'} — {payment.label}</span>}{formatOrderCurrency(order) && <span className="block text-[10px] text-[#8D6527] mt-1 whitespace-normal">{formatOrderCurrency(order)}</span>}</td><td className="px-4 py-4"><SelectMenu value={order.status} options={STATUS_OPTIONS} onChange={value => onUpdateStatus(order.id, value as OrderStatus)} disabled={updatingStatus} triggerClassName={`border rounded-xl px-2.5 py-2 text-xs font-bold ${STATUS_COLOR[order.status]}`} chevronClassName="text-current" ariaLabel="حالة الطلب" /></td><td className="px-4 py-4"><div className="flex items-center gap-2">{order.status !== 'ملغي' && order.paymentStatus !== 'paid' && <button onClick={onConfirmPayment} className="w-8 h-8 rounded-lg text-emerald-700 hover:bg-emerald-50 flex items-center justify-center" title="تأكيد الدفع"><CreditCard className="w-4 h-4" /></button>}<button onClick={onEdit} className="w-8 h-8 rounded-lg text-[#8D6527] hover:bg-[#F7F1E5] flex items-center justify-center" title="تعديل الطلب"><FilePenLine className="w-4 h-4" /></button><button onClick={onOpenInvoice} className="w-8 h-8 rounded-lg text-emerald-700 hover:bg-emerald-50 flex items-center justify-center" title="إصدار فاتورة"><ReceiptText className="w-4 h-4" /></button><button onClick={onDelete} className="w-8 h-8 rounded-lg text-red-700 hover:bg-red-50 flex items-center justify-center" title="حذف الطلب"><Trash2 className="w-4 h-4" /></button></div></td></tr>
 }
 
 function OrderCard({ order, onUpdateStatus, onEdit, onDelete, onOpenInvoice, onConfirmPayment, updatingStatus }: { order: Order; onUpdateStatus: (id: string, status: OrderStatus) => void; onEdit: () => void; onDelete: () => void; onOpenInvoice: () => void; onConfirmPayment: () => void; updatingStatus: boolean }) {
   const cleanPhone = (order.phone || '').replace(/[^\d+]/g, '')
+  const payment = paymentStatusView(order)
   return <article className="bg-white rounded-2xl border border-[#EADBCE] shadow-xs p-4 sm:p-5 flex flex-col gap-4 hover:border-[#DFB76C] transition-colors">
     <div className="flex items-start justify-between gap-3">
       <div><p className="text-[11px] text-[#968B7E] m-0" dir="ltr">#{order.id.slice(0, 8)}</p><h3 className="font-serif text-lg font-bold text-[#221811] m-0 mt-1">{order.customer}</h3><p className="text-[11px] text-[#685D52] m-0 mt-1 flex items-center gap-1.5"><CalendarDays className="w-3.5 h-3.5 text-[#8D6527]" />{formatDate(order.createdAt)}</p></div>
       <strong className="text-lg text-[#8D6527] whitespace-nowrap">{order.total} <small className="text-xs font-normal">ش</small></strong>
     </div>
     <div className="rounded-xl bg-[#FAF7F2] border border-[#EADBCE] px-3 py-2.5 text-xs text-[#221811] leading-6">{formatOrderItems(order) || '—'}<span className="block text-[11px] text-[#968B7E]">{order.itemsCount} قطع</span>{formatOrderCurrency(order) && <span className="block text-[10px] text-[#8D6527] mt-1">{formatOrderCurrency(order)}</span>}</div>
-    {(order.paymentMethodLabel || order.requestedPaymentMethod) && <div className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2 text-[11px] ${order.paymentStatus === 'paid' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-900'}`}><span className="font-bold">الدفع: {order.paymentMethodLabel || 'طريقة محددة'}</span><span>{order.paymentStatus === 'paid' ? 'مؤكد' : 'بانتظار التأكيد'}</span></div>}
+    {(order.paymentMethodLabel || order.requestedPaymentMethod) && <div className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2 text-[11px] ${payment.box}`}><span className="font-bold">الدفع: {order.paymentMethodLabel || 'طريقة محددة'}</span><span>{payment.label}</span></div>}
     {order.notes && <p className="text-xs text-[#8D6527] bg-amber-50/70 border border-amber-100 rounded-xl p-2.5 m-0 line-clamp-3">{order.notes}</p>}
     <div className="flex items-center justify-between gap-3 pt-1 border-t border-[#EADBCE]">
       {order.phone ? <div className="flex items-center gap-1.5 text-xs text-[#685D52]" dir="ltr"><Phone className="w-3.5 h-3.5 text-[#8D6527]" />{order.phone}{cleanPhone && <a href={`https://wa.me/${cleanPhone}`} target="_blank" rel="noopener noreferrer" className="text-emerald-700"><MessageCircle className="w-4 h-4" /></a>}</div> : <span />}
-      <select value={order.status} onChange={event => onUpdateStatus(order.id, event.target.value as OrderStatus)} disabled={updatingStatus} className={`border rounded-xl px-2 py-1.5 text-[11px] font-bold outline-none disabled:opacity-60 disabled:cursor-wait ${updatingStatus ? 'cursor-wait' : 'cursor-pointer'} ${STATUS_COLOR[order.status]}`}>{ALL_STATUSES.map(status => <option key={status} value={status}>{status}</option>)}</select>
+      <SelectMenu value={order.status} options={STATUS_OPTIONS} onChange={value => onUpdateStatus(order.id, value as OrderStatus)} disabled={updatingStatus} triggerClassName={`border rounded-xl px-2 py-1.5 text-[11px] font-bold ${STATUS_COLOR[order.status]}`} chevronClassName="text-current" ariaLabel="حالة الطلب" />
     </div>
-    <div className="flex flex-wrap justify-end gap-2">{order.paymentStatus !== 'paid' && <button onClick={onConfirmPayment} className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-50 rounded-lg px-2.5 py-2"><CreditCard className="w-3.5 h-3.5" />تأكيد الدفع</button>}<button onClick={onEdit} className="inline-flex items-center gap-1.5 text-xs font-bold text-[#8D6527] hover:bg-[#F7F1E5] rounded-lg px-2.5 py-2"><FilePenLine className="w-3.5 h-3.5" />تعديل</button><button onClick={onOpenInvoice} className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-50 rounded-lg px-2.5 py-2"><ReceiptText className="w-3.5 h-3.5" />فاتورة</button><button onClick={onDelete} className="inline-flex items-center gap-1.5 text-xs font-bold text-red-700 hover:bg-red-50 rounded-lg px-2.5 py-2"><Trash2 className="w-3.5 h-3.5" />حذف</button></div>
+    <div className="flex flex-wrap justify-end gap-2">{order.status !== 'ملغي' && order.paymentStatus !== 'paid' && <button onClick={onConfirmPayment} className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-50 rounded-lg px-2.5 py-2"><CreditCard className="w-3.5 h-3.5" />تأكيد الدفع</button>}<button onClick={onEdit} className="inline-flex items-center gap-1.5 text-xs font-bold text-[#8D6527] hover:bg-[#F7F1E5] rounded-lg px-2.5 py-2"><FilePenLine className="w-3.5 h-3.5" />تعديل</button><button onClick={onOpenInvoice} className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-50 rounded-lg px-2.5 py-2"><ReceiptText className="w-3.5 h-3.5" />فاتورة</button><button onClick={onDelete} className="inline-flex items-center gap-1.5 text-xs font-bold text-red-700 hover:bg-red-50 rounded-lg px-2.5 py-2"><Trash2 className="w-3.5 h-3.5" />حذف</button></div>
   </article>
 }
 
-function InvoiceModal({ order, settings, notify, onClose }: { order: Order; settings: SiteSettings; notify: (msg: string, type?: 'success' | 'error') => void; onClose: () => void }) {
-  const location = getOrderLocation(order)
-  const shippingStatus = getShippingStatus(order)
-  const [isPreparingImage, setIsPreparingImage] = useState(false)
+function OrderInvoiceModal({
+  order,
+  existingInvoice,
+  invoices,
+  products,
+  settings,
+  onAdd,
+  onUpdate,
+  onPersistSignature,
+  notify,
+  onClose,
+}: {
+  order: Order
+  existingInvoice: Invoice | null
+  invoices: Invoice[]
+  products: Product[]
+  settings: SiteSettings
+  onAdd: (draft: InvoiceDraft) => Promise<Invoice>
+  onUpdate: (invoice: Invoice) => Promise<void>
+  onPersistSignature?: (signature: InvoiceSignature) => Promise<void>
+  notify: (msg: string, type?: 'success' | 'error') => void
+  onClose: () => void
+}) {
+  const [saving, setSaving] = useState(false)
+  const [createdInvoice, setCreatedInvoice] = useState<Invoice | null>(null)
 
-  async function shareInvoiceImage() {
-    setIsPreparingImage(true)
+  const initialDraft = useMemo<InvoiceDraft>(() => {
+    const savedSignature = settings.invoiceSignature
+    const hasSavedSignature = Boolean(savedSignature?.drawing || savedSignature?.image)
+    const address = [order.governorate, order.city, order.address].filter(Boolean).join('، ')
+    const notes = [
+      `رقم الطلب: #${order.id.slice(0, 8)}`,
+      order.deliveryNotes ? `التوصيل: ${order.deliveryNotes}` : '',
+      order.notes ? `التطريز: ${order.notes}` : '',
+    ].filter(Boolean).join('\n')
+
+    return {
+      invoiceNumber: nextInvoiceNumber(invoices, 'sale'),
+      type: 'sale',
+      orderId: order.id,
+      customerName: order.customer || '',
+      customerPhone: order.phone || '',
+      deliveryAddress: address,
+      items: order.items.map((item, index) => ({
+        id: `${order.id}-${index}`,
+        ...(item.productId ? { productId: item.productId } : {}),
+        name: item.productName,
+        price: Number(item.price) || 0,
+        quantity: item.quantity ?? 1,
+        discount: 0,
+      })),
+      extraDiscount: 0,
+      notes,
+      ...(hasSavedSignature && savedSignature ? { signature: { ...savedSignature } } : {}),
+      createdAt: new Date().toISOString(),
+    }
+  }, [invoices, order, settings.invoiceSignature])
+
+  async function handleSave(draft: InvoiceDraft) {
+    setSaving(true)
     try {
-      const blob = await createInvoiceImage(order, settings)
-      const file = new File([blob], `invoice-${order.id.slice(0, 8)}.png`, { type: 'image/png' })
-      const canShareFiles = typeof navigator.share === 'function'
-        && (typeof navigator.canShare !== 'function' || navigator.canShare({ files: [file] }))
-
-      if (!canShareFiles) {
-        notify('هذا المتصفح لا يدعم مشاركة الملفات مباشرة. استخدمي زر تحميل الصورة ثم أرفقيها في واتساب.', 'error')
-        return
+      if (existingInvoice) {
+        const updated: Invoice = { ...draft, id: existingInvoice.id, createdAt: draft.createdAt || existingInvoice.createdAt }
+        await onUpdate(updated)
+        notify(`تم تحديث الفاتورة ${updated.invoiceNumber} وحفظ الخصومات بنجاح`)
+        setCreatedInvoice(updated)
+      } else {
+        const invoice = await onAdd(draft)
+        notify(`تم إصدار الفاتورة ${invoice.invoiceNumber} وحفظها بنجاح`)
+        setCreatedInvoice(invoice)
       }
-
-      await navigator.share({
-        title: `فاتورة ${settings.storeName}`,
-        files: [file],
-      })
-      notify('تمت مشاركة صورة الفاتورة عبر التطبيق المختار.')
-    } catch (error) {
-      if ((error as DOMException)?.name !== 'AbortError') notify('تعذر فتح قائمة مشاركة صورة الفاتورة.', 'error')
+    } catch (err) {
+      console.error('Order invoice save error:', err)
+      notify('تعذر حفظ الفاتورة. تحققي من الاتصال والصلاحيات.', 'error')
     } finally {
-      setIsPreparingImage(false)
+      setSaving(false)
     }
   }
 
-  async function downloadImage() {
-    setIsPreparingImage(true)
+  if (createdInvoice) {
+    return <InvoicePreviewModal invoice={createdInvoice} settings={settings} notify={notify} onClose={onClose} />
+  }
+
+  return (
+    <Modal onClose={onClose} size="2xl" structured className="p-0">
+      <InvoiceEditor
+        existing={existingInvoice}
+        initialDraft={initialDraft}
+        lockType
+        invoices={invoices}
+        products={products}
+        settings={settings}
+        saving={saving}
+        onSave={handleSave}
+        onPersistSignature={onPersistSignature}
+        onClose={onClose}
+        notify={notify}
+        contextLabel={`من الطلب #${order.id.slice(0, 8)} · ${existingInvoice ? 'عدّلي الخصومات ثم احفظي التحديث' : 'عدّلي خصم أي صنف أو الخصم الكلي ثم احفظي الفاتورة'}`}
+      />
+    </Modal>
+  )
+}
+
+function InvoicePreviewModal({
+  invoice,
+  settings,
+  notify,
+  onClose,
+}: {
+  invoice: Invoice
+  settings: SiteSettings
+  notify: (msg: string, type?: 'success' | 'error') => void
+  onClose: () => void
+}) {
+  const [imageSaving, setImageSaving] = useState(false)
+  const whatsapp = invoiceWhatsAppLink(invoice)
+
+  function shareInvoice() {
+    if (!whatsapp) {
+      notify('لا يوجد رقم واتساب صالح لهذه الفاتورة', 'error')
+      return
+    }
+    const text = buildInvoiceShareText(invoice, settings)
+    window.open(`${whatsapp}?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer')
+  }
+
+  async function saveAsImage() {
+    setImageSaving(true)
     try {
-      const blob = await createInvoiceImage(order, settings)
-      downloadInvoiceImage(blob, order)
-      notify('تم تنزيل صورة الفاتورة بصيغة PNG.')
-    } catch {
+      const blob = await createManualInvoiceImage(invoice, settings)
+      downloadManualInvoiceImage(blob, invoice)
+      notify(`تم حفظ ${invoice.invoiceNumber} كصورة جاهزة للإرسال`)
+    } catch (err) {
+      console.error('Invoice image error:', err)
       notify('تعذر إنشاء صورة الفاتورة.', 'error')
     } finally {
-      setIsPreparingImage(false)
+      setImageSaving(false)
     }
   }
 
-  return <Modal onClose={onClose} size="lg" className="rounded-3xl overflow-hidden p-0 border border-[#EADBCE]">
-    <div className="invoice-print-root bg-white p-5 sm:p-8">
-      <div className="no-print flex items-center justify-between gap-3 border-b border-[#EADBCE] pb-4 mb-6">
-        <div className="flex items-center gap-2 text-sm font-bold text-[#8D6527]"><ReceiptText className="w-5 h-5" />معاينة فاتورة الطلب</div>
+  return (
+    <Modal onClose={onClose} size="xl" structured className="p-0">
+      <div className="bg-[#FAF7F2] p-4 border-b border-[#EADBCE] flex flex-wrap items-center justify-between gap-2 shrink-0">
         <div className="flex items-center gap-2">
-          <button onClick={onClose} className="w-9 h-9 rounded-xl border border-[#EADBCE] flex items-center justify-center text-[#685D52] hover:bg-white" aria-label="إغلاق الفاتورة"><X className="w-4 h-4" /></button>
-          <button onClick={downloadImage} disabled={isPreparingImage} className="inline-flex items-center gap-1.5 rounded-xl border border-[#8D6527] px-3 py-2 text-xs font-bold text-[#8D6527] hover:bg-[#FAF7F2] disabled:opacity-60"><ReceiptText className="w-3.5 h-3.5" />تحميل صورة</button>
-          <button onClick={() => void shareInvoiceImage()} disabled={isPreparingImage} className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-60"><Share2 className="w-3.5 h-3.5" />مشاركة الفاتورة</button>
+          <ReceiptText className="w-4 h-4 text-[#8D6527]" />
+          <span className="font-bold text-sm text-[#221811]">{invoice.invoiceNumber}</span>
+          <span className="text-[10px] text-[#968B7E]">{invoiceDateLabel(invoice.createdAt)}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={shareInvoice} className="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-3 py-2 flex items-center gap-1.5 transition-colors cursor-pointer">
+            <MessageCircle className="w-3.5 h-3.5" />
+            واتساب
+          </button>
+          <button onClick={() => printManualInvoice(invoice, settings)} className="rounded-lg bg-[#8D6527] hover:bg-[#704F1E] text-white text-[11px] font-bold px-3 py-2 flex items-center gap-1.5 transition-colors cursor-pointer">
+            <Printer className="w-3.5 h-3.5" />
+            طباعة / PDF
+          </button>
+          <button onClick={() => { void saveAsImage() }} disabled={imageSaving} className="rounded-lg bg-[#24180E] hover:bg-[#3A2A18] text-[#DFB76C] text-[11px] font-bold px-3 py-2 flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-60">
+            {imageSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImageDown className="w-3.5 h-3.5" />}
+            حفظ كصورة
+          </button>
+          <button onClick={onClose} className="w-8 h-8 rounded-lg border border-[#EADBCE] bg-white text-[#685D52] flex items-center justify-center cursor-pointer" title="إغلاق"><X className="w-4 h-4" /></button>
         </div>
       </div>
-
-      <div className="flex items-start justify-between gap-5 border-b-2 border-[#8D6527] pb-5">
-        <div><p className="text-xs text-[#8D6527] font-bold m-0">فاتورة مبيعات</p><h2 className="font-serif text-3xl text-[#221811] m-0 mt-1" style={{ fontFamily: 'Amiri, serif' }}>{settings.storeName}</h2>{settings.address && <p className="text-[11px] text-[#685D52] m-0 mt-1">{settings.address}</p>}{settings.phone && <p className="text-[11px] text-[#685D52] m-0" dir="ltr">{settings.phone}</p>}</div>
-        <div className="text-left text-xs text-[#685D52]"><p className="m-0">رقم الفاتورة</p><strong className="text-sm text-[#221811] block mt-1" dir="ltr">INV-{order.id.slice(0, 8).toUpperCase()}</strong><p className="m-0 mt-2">التاريخ</p><strong className="text-[#221811] block mt-1">{formatDate(order.createdAt)}</strong></div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-5 text-xs">
-        <div className="rounded-xl bg-[#FAF7F2] p-4"><p className="font-bold text-[#221811] m-0 mb-2">بيانات العميلة</p><p className="m-0">الاسم: {order.customer}</p><p className="m-0 mt-1" dir="ltr">الجوال: {order.phone || '—'}</p>{order.email && <p className="m-0 mt-1" dir="ltr">{order.email}</p>}{location && <p className="m-0 mt-1">العنوان: {location}</p>}</div>
-        <div className="rounded-xl bg-[#FAF7F2] p-4"><p className="font-bold text-[#221811] m-0 mb-2">بيانات الطلب</p><p className="m-0">الحالة: {order.status}</p><p className="m-0 mt-1">عدد القطع: {order.itemsCount}</p><p className="m-0 mt-1">الشحن: {shippingStatus === 'free' ? 'مجاني' : 'عادي — يتم التنسيق'}</p>{order.shippingThreshold !== undefined && <p className="m-0 mt-1">حد الشحن المجاني: {formatIls(order.shippingThreshold)}</p>}</div>
-      </div>
-
-      <div className="overflow-x-auto border border-[#EADBCE] rounded-xl">
-        <table className="w-full text-right text-xs border-collapse"><thead className="bg-[#24180E] text-[#F7F1E5]"><tr><th className="p-3">المنتج</th><th className="p-3">الكمية</th><th className="p-3">سعر الوحدة</th><th className="p-3">الإجمالي</th></tr></thead><tbody className="divide-y divide-[#EADBCE]">{order.items.length > 0 ? order.items.map(item => { const quantity = item.quantity ?? 1; return <tr key={`${item.productId}-${quantity}`}><td className="p-3">{item.productName}</td><td className="p-3">× {quantity}</td><td className="p-3">{formatIls(item.price)}</td><td className="p-3 font-bold">{formatIls(item.price * quantity)}</td></tr> }) : <tr><td colSpan={4} className="p-5 text-center text-[#968B7E]">لا توجد منتجات</td></tr>}</tbody></table>
-      </div>
-
-      <div className="flex justify-end mt-5"><div className="w-full sm:w-72 space-y-2 text-xs"><div className="flex justify-between text-[#685D52]"><span>المجموع الأساسي</span><strong className="text-[#221811]">{formatIls(order.total)}</strong></div>{formatOrderCurrency(order) && <div className="flex justify-between text-[#8D6527]"><span>قيمة العرض وقت الطلب</span><strong>{formatOrderCurrency(order)}</strong></div>}<div className="flex justify-between text-[#685D52]"><span>الشحن</span><strong className="text-[#221811]">{shippingStatus === 'free' ? 'مجاني' : 'يُنسق مع العميلة'}</strong></div><div className="flex justify-between border-t border-[#EADBCE] pt-3 text-sm"><strong>الإجمالي</strong><strong className="text-[#8D6527]">{formatIls(order.total)}</strong></div></div></div>
-
-      {(order.deliveryNotes || order.notes) && <div className="mt-5 rounded-xl border border-[#EADBCE] bg-[#FFFCF8] p-4 text-xs"><p className="font-bold text-[#221811] m-0 mb-2">ملاحظات</p>{order.deliveryNotes && <p className="m-0 text-[#685D52]">التوصيل: {order.deliveryNotes}</p>}{order.notes && <p className="m-0 mt-1 text-[#685D52]">التطريز: {order.notes}</p>}</div>}
-      <p className="text-[10px] text-[#968B7E] text-center mt-6 mb-0">شكراً لثقتك بمتجر {settings.storeName} — الفاتورة الأساسية محفوظة بالشيكل.</p>
-    </div>
-  </Modal>
+      <iframe
+        title={`معاينة ${invoice.invoiceNumber}`}
+        srcDoc={buildManualInvoiceHtml(invoice, settings)}
+        className="w-full flex-1 min-h-[60vh] bg-white"
+      />
+    </Modal>
+  )
 }
 
 function DateFilterButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) { return <button onClick={onClick} className={`px-3 py-2 rounded-xl text-xs font-bold transition-all ${active ? 'bg-[#8D6527] text-white' : 'border border-[#EADBCE] text-[#685D52] hover:border-[#C59B4B]'}`}>{children}</button> }
@@ -452,7 +563,7 @@ function OrderEditor({ order, onClose, onSave }: { order: Order; onClose: () => 
   const [draft, setDraft] = useState(order); const [saving, setSaving] = useState(false)
   async function submit(event: FormEvent) { event.preventDefault(); if (!draft.customer.trim() || draft.total < 0) return; setSaving(true); try { await onSave({ ...draft, customer: draft.customer.trim(), phone: draft.phone?.trim(), email: draft.email?.trim(), governorate: draft.governorate?.trim(), city: draft.city?.trim(), address: draft.address?.trim(), deliveryNotes: draft.deliveryNotes?.trim(), notes: draft.notes?.trim(), total: Number(draft.total) || 0 }) } catch { /* parent notifies */ } finally { setSaving(false) } }
   const inputClass = 'w-full bg-[#FAF7F2] border border-[#EADBCE] rounded-xl px-3.5 py-2.5 text-xs text-[#221811] outline-none focus:border-[#8D6527]'
-  return <Modal onClose={onClose} size="lg"><form onSubmit={submit} className="p-6 sm:p-8"><div className="flex items-start justify-between gap-4 border-b border-[#EADBCE] pb-4"><div><h2 className="font-serif text-2xl text-[#221811] m-0">تعديل الطلب</h2><p className="text-xs text-[#685D52] m-0 mt-1" dir="ltr">#{order.id}</p></div><button type="button" onClick={onClose} className="w-9 h-9 rounded-xl hover:bg-[#FAF7F2] text-[#685D52] flex items-center justify-center"><X className="w-5 h-5" /></button></div><div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6"><Field label="اسم العميلة"><input required value={draft.customer} onChange={event => setDraft(current => ({ ...current, customer: event.target.value }))} className={inputClass} /></Field><Field label="رقم الهاتف"><input value={draft.phone ?? ''} dir="ltr" onChange={event => setDraft(current => ({ ...current, phone: event.target.value }))} className={`${inputClass} text-left`} /></Field><Field label="إجمالي الطلب (شيكل)"><input required min="0" type="number" value={draft.total} onChange={event => setDraft(current => ({ ...current, total: Number(event.target.value) }))} className={inputClass} /></Field><Field label="حالة الطلب"><select value={draft.status} onChange={event => setDraft(current => ({ ...current, status: event.target.value as OrderStatus }))} className={inputClass}>{ALL_STATUSES.map(status => <option key={status}>{status}</option>)}</select></Field><div className="sm:col-span-2 rounded-xl border border-[#EADBCE] bg-[#FAF7F2] p-3 text-xs"><strong className="text-[#221811]">الدفع:</strong> <span className="text-[#685D52]">{draft.paymentMethodLabel || 'غير محدد'} — {draft.paymentStatus === 'paid' ? 'مؤكد' : 'بانتظار التأكيد'}</span></div><CustomerDetailsEditor draft={draft} onChange={setDraft} /><div className="sm:col-span-2"><Field label="المنتجات المسجلة"><div className="bg-[#FAF7F2] border border-[#EADBCE] rounded-xl px-3.5 py-3 text-xs text-[#685D52]">{order.items.length > 0 ? formatOrderItems(order) : 'لا توجد منتجات مسجلة'}</div></Field></div>{formatOrderCurrency(order) && <div className="sm:col-span-2"><Field label="عملة العرض وقت الطلب"><div className="bg-amber-50/70 border border-amber-100 rounded-xl px-3.5 py-3 text-xs text-[#8D6527]">{formatOrderCurrency(order)}</div></Field></div>}<div className="sm:col-span-2"><Field label="الملاحظات"><textarea rows={4} value={draft.notes ?? ''} onChange={event => setDraft(current => ({ ...current, notes: event.target.value }))} className={`${inputClass} resize-y`} /></Field></div></div><div className="flex justify-end gap-2 pt-5 mt-6 border-t border-[#EADBCE]"><button type="button" onClick={onClose} className="px-5 py-3 rounded-xl text-xs font-bold text-[#685D52] hover:bg-[#FAF7F2]">إلغاء</button><button disabled={saving} className="px-5 py-3 rounded-xl text-xs font-bold text-white bg-[#8D6527] hover:bg-[#704F1E] disabled:opacity-60">{saving ? 'جارٍ الحفظ...' : 'حفظ التعديلات'}</button></div></form></Modal>
+  return <Modal onClose={onClose} size="lg"><form onSubmit={submit} className="p-6 sm:p-8"><div className="flex items-start justify-between gap-4 border-b border-[#EADBCE] pb-4"><div><h2 className="font-serif text-2xl text-[#221811] m-0">تعديل الطلب</h2><p className="text-xs text-[#685D52] m-0 mt-1" dir="ltr">#{order.id}</p></div><button type="button" onClick={onClose} className="w-9 h-9 rounded-xl hover:bg-[#FAF7F2] text-[#685D52] flex items-center justify-center"><X className="w-5 h-5" /></button></div><div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6"><Field label="اسم العميلة"><input required value={draft.customer} onChange={event => setDraft(current => ({ ...current, customer: event.target.value }))} className={inputClass} /></Field><Field label="رقم الهاتف"><input value={draft.phone ?? ''} dir="ltr" onChange={event => setDraft(current => ({ ...current, phone: event.target.value }))} className={`${inputClass} text-left`} /></Field><Field label="إجمالي الطلب (شيكل)"><input required min="0" type="number" value={draft.total} onChange={event => setDraft(current => ({ ...current, total: Number(event.target.value) }))} className={inputClass} /></Field><Field label="حالة الطلب"><SelectMenu value={draft.status} options={STATUS_OPTIONS} onChange={value => setDraft(current => ({ ...current, status: value as OrderStatus }))} variant="admin" className="w-full" ariaLabel="حالة الطلب" /></Field><div className="sm:col-span-2 rounded-xl border border-[#EADBCE] bg-[#FAF7F2] p-3 text-xs"><strong className="text-[#221811]">الدفع:</strong> <span className="text-[#685D52]">{draft.paymentMethodLabel || 'غير محدد'} — {paymentStatusView(draft).label}</span></div><CustomerDetailsEditor draft={draft} onChange={setDraft} /><div className="sm:col-span-2"><Field label="المنتجات المسجلة"><div className="bg-[#FAF7F2] border border-[#EADBCE] rounded-xl px-3.5 py-3 text-xs text-[#685D52]">{order.items.length > 0 ? formatOrderItems(order) : 'لا توجد منتجات مسجلة'}</div></Field></div>{formatOrderCurrency(order) && <div className="sm:col-span-2"><Field label="عملة العرض وقت الطلب"><div className="bg-amber-50/70 border border-amber-100 rounded-xl px-3.5 py-3 text-xs text-[#8D6527]">{formatOrderCurrency(order)}</div></Field></div>}<div className="sm:col-span-2"><Field label="الملاحظات"><textarea rows={4} value={draft.notes ?? ''} onChange={event => setDraft(current => ({ ...current, notes: event.target.value }))} className={`${inputClass} resize-y`} /></Field></div></div><div className="flex justify-end gap-2 pt-5 mt-6 border-t border-[#EADBCE]"><button type="button" onClick={onClose} className="px-5 py-3 rounded-xl text-xs font-bold text-[#685D52] hover:bg-[#FAF7F2]">إلغاء</button><button disabled={saving} className="px-5 py-3 rounded-xl text-xs font-bold text-white bg-[#8D6527] hover:bg-[#704F1E] disabled:opacity-60">{saving ? 'جارٍ الحفظ...' : 'حفظ التعديلات'}</button></div></form></Modal>
 }
 function CustomerDetailsEditor({ draft, onChange }: { draft: Order; onChange: (order: Order) => void }) {
   const inputClass = 'w-full bg-[#FAF7F2] border border-[#EADBCE] rounded-xl px-3.5 py-2.5 text-xs text-[#221811] outline-none focus:border-[#8D6527]'

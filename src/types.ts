@@ -36,7 +36,7 @@ export type Product = {
 
 export type OrderStatus = 'جديد' | 'قيد التجهيز' | 'تم التواصل' | 'مكتمل' | 'ملغي'
 export type ShippingStatus = 'free' | 'standard'
-export type PaymentStatus = 'pending' | 'paid'
+export type PaymentStatus = 'pending' | 'paid' | 'cancelled'
 export type PaymentMethodId = 'jawwalpay' | 'palpay' | 'bank_palestine' | 'other'
 
 export type PaymentMethodDetails = {
@@ -93,6 +93,45 @@ export type Order = {
   createdAt: string
 }
 
+export type InvoiceType = 'sale' | 'purchase'
+
+export type InvoiceItem = {
+  id: string
+  productId?: string
+  name: string
+  price: number
+  quantity: number
+  /** Discount amount in ILS applied to the whole line. */
+  discount: number
+}
+
+export type InvoiceSignature = {
+  /** Handwritten signature exported from the signature pad (PNG data URL). */
+  drawing?: string
+  /** Uploaded signature or stamp image (data URL). */
+  image?: string
+}
+
+export type Invoice = {
+  id: string
+  invoiceNumber: string
+  type: InvoiceType
+  /** Original order id when this invoice was issued from an order. */
+  orderId?: string
+  customerName: string
+  customerPhone: string
+  deliveryAddress: string
+  items: InvoiceItem[]
+  /** Extra discount amount in ILS applied to the whole invoice. */
+  extraDiscount: number
+  notes?: string
+  signature?: InvoiceSignature
+  createdAt: string
+  updatedAt?: string
+}
+
+export type InvoiceDraft = Omit<Invoice, 'id'>
+
 export type CartItem = Product & { quantity: number }
 
 export type ToastType = 'success' | 'error' | 'info'
@@ -127,6 +166,8 @@ export type SiteSettings = {
   usdRate: number
   eurRate: number
   socialLinks: SocialLinks
+  /** Default invoice signature (handwritten and/or uploaded) shared across devices. */
+  invoiceSignature?: InvoiceSignature
 }
 
 export const DEFAULT_SITE_SETTINGS: SiteSettings = {
@@ -156,7 +197,12 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
 
 export type NewsletterSubscriber = {
   id: string
-  email: string
+  /** Friend's name — for subscriptions made through the WhatsApp list. */
+  name?: string
+  /** WhatsApp number, stored as international digits (e.g. 970599123456). */
+  phone?: string
+  /** Legacy field kept for older subscriptions created before the WhatsApp list. */
+  email?: string
   createdAt: string
   source?: string
   status?: 'active' | 'unsubscribed'
