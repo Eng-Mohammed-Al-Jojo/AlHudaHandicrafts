@@ -20,6 +20,8 @@ import {
   Coins,
   ShieldCheck,
   ChevronDown,
+  Ticket,
+  Sparkles,
 } from 'lucide-react'
 import type { FirebaseUser } from '../../types'
 import Modal from '../ui/Modal'
@@ -54,6 +56,8 @@ export const SETTINGS_SUB_ITEMS: SubNavItem[] = [
   { id: 'payment',       label: 'طرق الدفع والتحصيل',    to: '/admin/settings/payment',       icon: CreditCard },
   { id: 'communication', label: 'التواصل وتوجيه الطلبات', to: '/admin/settings/communication', icon: MessageCircle },
   { id: 'currencies',    label: 'العملات وأسعار الصرف',    to: '/admin/settings/currencies',    icon: Coins },
+  { id: 'coupons',       label: 'كوبونات الخصم',         to: '/admin/settings/coupons',       icon: Ticket },
+  { id: 'promotions',    label: 'البنرات والترويج',      to: '/admin/settings/promotions',    icon: Sparkles },
   { id: 'backup',        label: 'النسخ الاحتياطي والأمان', to: '/admin/settings/backup',        icon: ShieldCheck },
 ]
 

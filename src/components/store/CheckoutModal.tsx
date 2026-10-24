@@ -17,6 +17,7 @@ import {
   CreditCard,
   Info,
   Copy,
+  Ticket,
 } from 'lucide-react'
 import type { CartItem, CurrencyCode, PaymentMethod, PaymentMethodId, SiteSettings } from '../../types'
 import Modal from '../ui/Modal'
@@ -40,11 +41,18 @@ export type CheckoutCustomerDetails = {
   deliveryNotes: string
   notes: string
   requestedPaymentMethod: PaymentMethodId
+  couponCode?: string
+  discountAmount?: number
 }
 
 interface Props {
   items: CartItem[]
   total: number
+  discountAmount?: number
+  finalTotal?: number
+  couponCode?: string
+  onApplyCoupon?: (code: string) => Promise<boolean>
+  onRemoveCoupon?: () => void
   settings: SiteSettings
   onSubmit: (details: CheckoutCustomerDetails, currencyDetails: CheckoutCurrencyDetails) => Promise<boolean>
   onClose: () => void
@@ -64,7 +72,7 @@ function validateCustomerDetails(details: CheckoutCustomerDetails) {
   return ''
 }
 
-export default function CheckoutModal({ items, total, settings, onSubmit, onClose }: Props) {
+export default function CheckoutModal({ items, total, discountAmount, finalTotal, couponCode, onApplyCoupon, onRemoveCoupon, settings, onSubmit, onClose }: Props) {
   const [customer, setCustomer] = useState('')
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
@@ -75,6 +83,9 @@ export default function CheckoutModal({ items, total, settings, onSubmit, onClos
   const [paymentMethodId, setPaymentMethodId] = useState<PaymentMethodId | ''>('')
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [couponInput, setCouponInput] = useState(couponCode || '')
+  const [couponLoading, setCouponLoading] = useState(false)
+  const [couponError, setCouponError] = useState('')
   const { currency, currentRate, convertPrice, formatPrice } = useCurrency()
 
   const isWhatsApp = settings.orderRouting === 'whatsapp'
@@ -118,6 +129,8 @@ export default function CheckoutModal({ items, total, settings, onSubmit, onClos
       deliveryNotes: deliveryNotes.trim(),
       notes: notes.trim(),
       requestedPaymentMethod: paymentMethodId,
+      couponCode: couponCode,
+      discountAmount: discountAmount,
     }
     const validationError = validateCustomerDetails(details)
     if (validationError) {
@@ -127,12 +140,13 @@ export default function CheckoutModal({ items, total, settings, onSubmit, onClos
 
     setFormError('')
     setSaving(true)
+    const payableAmount = typeof finalTotal === 'number' ? finalTotal : Math.max(0, total - (discountAmount || 0))
     try {
       const saved = await onSubmit(details, {
         currency,
         rate: currentRate,
-        displayedAmount: convertPrice(total, currency),
-        displayedTotal: formatPrice(total, { showCode: true }),
+        displayedAmount: convertPrice(payableAmount, currency),
+        displayedTotal: formatPrice(payableAmount, { showCode: true }),
       })
       if (saved) onClose()
     } finally {
@@ -187,6 +201,19 @@ export default function CheckoutModal({ items, total, settings, onSubmit, onClos
               <span>مجموع المنتجات:</span>
               <span dir="ltr">{formatPrice(total)}</span>
             </div>
+
+            {discountAmount && discountAmount > 0 && couponCode ? (
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-emerald-700 font-bold">
+                  <Ticket className="w-3 h-3" />
+                  <span>خصم</span>
+                  <span className="bg-emerald-100 text-emerald-800 font-mono text-[10px] px-1.5 py-0.5 rounded-md border border-emerald-200 tracking-wide">{couponCode}</span>
+                  <span>:</span>
+                </span>
+                <span className="text-emerald-700 font-bold" dir="ltr">-{formatPrice(discountAmount)}</span>
+              </div>
+            ) : null}
+
             <div className="flex items-center justify-between">
               <span className="text-[#685D52] flex items-center gap-1.5"><Truck className="w-3.5 h-3.5 text-[#8D6527]" /><span>الشحن:</span></span>
               {isFreeShipping ? (
@@ -202,10 +229,18 @@ export default function CheckoutModal({ items, total, settings, onSubmit, onClos
           </div>
 
           <div className="flex items-center justify-between gap-4 pt-2 border-t border-[#EADBCE]/60">
-            <span className="text-xs font-semibold text-[#221811]">{currency === 'ILS' ? 'المبلغ الإجمالي' : 'القيمة التقديرية بعملة العرض'}</span>
+            <span className="text-xs font-semibold text-[#221811]">
+              {discountAmount && discountAmount > 0 ? 'المبلغ النهائي بعد الخصم' : currency === 'ILS' ? 'المبلغ الإجمالي' : 'القيمة التقديرية بعملة العرض'}
+            </span>
             <div className="text-left">
-              <strong className="text-lg font-bold text-[#8D6527] block" dir="ltr">{formatPrice(total, { showCode: true })}</strong>
-              {currency !== 'ILS' && <span className="text-[10px] text-[#968B7E]">السعر الأساسي: {total.toLocaleString('en-US')} ₪</span>}
+              <strong className="text-lg font-bold text-[#8D6527] block" dir="ltr">
+                {formatPrice(typeof finalTotal === 'number' ? finalTotal : Math.max(0, total - (discountAmount || 0)), { showCode: true })}
+              </strong>
+              {currency !== 'ILS' && (
+                <span className="text-[10px] text-[#968B7E]">
+                  السعر الأساسي: {(typeof finalTotal === 'number' ? finalTotal : Math.max(0, total - (discountAmount || 0))).toLocaleString('en-US')} ₪
+                </span>
+              )}
             </div>
           </div>
           {currency !== 'ILS' && (
@@ -347,6 +382,123 @@ export default function CheckoutModal({ items, total, settings, onSubmit, onClos
               </>
             ) : (
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">لم يتم تفعيل أي طريقة دفع بعد. تواصلي مع المتجر لإتمام الطلب.</div>
+            )}
+          </div>
+
+          {/* ── Coupon Section ── */}
+          <div className="pt-3 border-t border-[#EADBCE]">
+            {/* Section header */}
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-7 h-7 rounded-lg bg-[#8D6527]/10 flex items-center justify-center shrink-0">
+                <Ticket className="w-3.5 h-3.5 text-[#8D6527]" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-[#221811] m-0">كود الخصم</p>
+                <p className="text-[10px] text-[#968B7E] m-0">أدخلي الكود للحصول على خصم فوري</p>
+              </div>
+            </div>
+
+            {/* Coupon applied success state */}
+            {couponCode && discountAmount && discountAmount > 0 ? (
+              <div className="relative flex items-center justify-between gap-3 bg-gradient-to-l from-emerald-50 to-emerald-50/60 border border-emerald-200 rounded-2xl px-4 py-3">
+                {/* Decorative dashed left border */}
+                <div className="absolute right-0 top-2 bottom-2 w-1 rounded-full bg-emerald-400" />
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-100 border border-emerald-200 flex items-center justify-center shrink-0">
+                    <Ticket className="w-4 h-4 text-emerald-700" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[10px] font-semibold text-emerald-700 uppercase tracking-wider">كوبون مطبّق</span>
+                    </div>
+                    <p className="text-sm font-bold text-emerald-800 font-mono m-0 tracking-widest">{couponCode}</p>
+                  </div>
+                </div>
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  <span className="text-base font-bold text-emerald-700" dir="ltr">-{formatPrice(discountAmount)}</span>
+                  <button
+                    type="button"
+                    onClick={() => { onRemoveCoupon?.(); setCouponInput(''); setCouponError('') }}
+                    className="flex items-center gap-1 text-[10px] text-emerald-600 hover:text-red-600 transition-colors font-semibold"
+                  >
+                    <X className="w-3 h-3" />
+                    إزالة الكوبون
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-1.5">
+                <div className="flex gap-2">
+                  <div className={`flex-1 flex items-center gap-2 bg-[#FAF7F2] border rounded-xl px-3 py-2.5 focus-within:bg-white transition-all ${couponError ? 'border-red-300 focus-within:border-red-400' : 'border-[#EADBCE] focus-within:border-[#8D6527]'}`}>
+                    <Ticket className="w-3.5 h-3.5 text-[#C59B4B] shrink-0" />
+                    <input
+                      id="coupon-input"
+                      placeholder="أدخلي كود الخصم هنا..."
+                      className="flex-1 border-0 outline-none text-xs font-mono font-bold text-[#221811] bg-transparent placeholder-[#968B7E] tracking-widest uppercase"
+                      value={couponInput}
+                      onChange={e => { setCouponInput(e.target.value.toUpperCase()); setCouponError('') }}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          if (!couponInput.trim() || couponLoading) return
+                          setCouponLoading(true)
+                          setCouponError('')
+                          void onApplyCoupon?.(couponInput.trim()).then(ok => {
+                            if (!ok) setCouponError('كود الخصم غير صالح أو منتهي الصلاحية.')
+                          }).finally(() => setCouponLoading(false))
+                        }
+                      }}
+                      disabled={couponLoading}
+                      maxLength={30}
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+                    {couponInput && (
+                      <button
+                        type="button"
+                        onClick={() => { setCouponInput(''); setCouponError('') }}
+                        className="text-[#968B7E] hover:text-[#221811] transition-colors"
+                        aria-label="مسح الكود"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    disabled={!couponInput.trim() || couponLoading}
+                    onClick={() => {
+                      if (!couponInput.trim() || couponLoading) return
+                      setCouponLoading(true)
+                      setCouponError('')
+                      void onApplyCoupon?.(couponInput.trim()).then(ok => {
+                        if (!ok) setCouponError('كود الخصم غير صالح أو منتهي الصلاحية.')
+                      }).finally(() => setCouponLoading(false))
+                    }}
+                    className="shrink-0 px-4 py-2.5 rounded-xl text-xs font-bold bg-[#8D6527] hover:bg-[#704F1E] text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 shadow-sm"
+                  >
+                    {couponLoading ? (
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                        <span>جارٍ...</span>
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1.5">
+                        <Check className="w-3.5 h-3.5" />
+                        <span>تطبيق</span>
+                      </span>
+                    )}
+                  </button>
+                </div>
+
+                {/* Inline error message */}
+                {couponError && (
+                  <div className="flex items-center gap-1.5 px-1">
+                    <AlertCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                    <p className="text-[11px] text-red-600 font-medium m-0">{couponError}</p>
+                  </div>
+                )}
+              </div>
             )}
           </div>
 

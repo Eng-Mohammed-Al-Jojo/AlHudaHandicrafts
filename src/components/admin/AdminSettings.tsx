@@ -39,13 +39,28 @@ import { db } from '../../firebase'
 import { collection, getDocs, doc, writeBatch } from 'firebase/firestore'
 import { DEFAULT_SITE_SETTINGS, type SiteSettings, type PaymentMethod, type PaymentMethodDetails } from '../../types'
 
+import { Ticket, Sparkles as SparklesIcon } from 'lucide-react'
+import AdminCoupons from './AdminCoupons'
+import AdminPromotions from './AdminPromotions'
+import type { Coupon, Promotion, Product, FirebaseUser } from '../../types'
+
 interface Props {
   settings: SiteSettings
+  coupons: Coupon[]
+  promotions: Promotion[]
+  products?: Product[]
+  user?: FirebaseUser | null
   onSave: (settings: SiteSettings) => Promise<void>
+  onAddCoupon: (c: Omit<Coupon, 'id'>) => Promise<void>
+  onUpdateCoupon?: (id: string, patch: Partial<Coupon>) => Promise<void>
+  onDeleteCoupon: (id: string) => Promise<void>
+  onAddPromotion: (p: Omit<Promotion, 'id'>) => Promise<void>
+  onUpdatePromotion?: (id: string, patch: Partial<Promotion>) => Promise<void>
+  onDeletePromotion: (id: string) => Promise<void>
   notify: (message: string, type?: 'success' | 'error') => void
 }
 
-export type SettingsTabId = 'general' | 'shipping' | 'payment' | 'communication' | 'currencies' | 'backup'
+export type SettingsTabId = 'general' | 'shipping' | 'payment' | 'communication' | 'currencies' | 'coupons' | 'promotions' | 'backup'
 
 export interface SettingsTabInfo {
   id: SettingsTabId
@@ -92,6 +107,20 @@ export const SETTINGS_TABS: SettingsTabInfo[] = [
     description: 'تحديد أسعار صرف الدولار واليورو مقابل الشيكل مع معاينة حية لكيفية ظهور الأسعار للزبائن.',
   },
   {
+    id: 'coupons',
+    label: 'كوبونات الخصم',
+    shortLabel: 'كوبونات الخصم',
+    icon: Ticket,
+    description: 'إدارة كوبونات الخصم وتحديد نسب أو قيم الخصم وتواريخ الصلاحية.',
+  },
+  {
+    id: 'promotions',
+    label: 'البنرات والترويج',
+    shortLabel: 'البنرات والترويج',
+    icon: SparklesIcon,
+    description: 'إدارة البنرات الإعلانية والترويجية المعروضة للزبائن.',
+  },
+  {
     id: 'backup',
     label: 'النسخ الاحتياطي والأمان',
     shortLabel: 'النسخ الاحتياطي',
@@ -100,7 +129,21 @@ export const SETTINGS_TABS: SettingsTabInfo[] = [
   },
 ]
 
-export default function AdminSettings({ settings, onSave, notify }: Props) {
+export default function AdminSettings({
+  settings,
+  coupons,
+  promotions,
+  products = [],
+  user,
+  onSave,
+  onAddCoupon,
+  onUpdateCoupon,
+  onDeleteCoupon,
+  onAddPromotion,
+  onUpdatePromotion,
+  onDeletePromotion,
+  notify,
+}: Props) {
   const { tab } = useParams<{ tab?: string }>()
   const navigate = useNavigate()
 
@@ -1101,6 +1144,34 @@ export default function AdminSettings({ settings, onSave, notify }: Props) {
             </div>
 
             <SaveBar saving={saving} hasUnsavedChanges={hasUnsavedChanges} onReset={() => setDraft(settings)} prevTab={prevTabInfo} onPrev={() => prevTabInfo && switchTab(prevTabInfo.id)} nextTab={nextTabInfo} onNext={() => nextTabInfo && switchTab(nextTabInfo.id)} />
+          </div>
+        )}
+
+        {/* ── TAB: COUPONS ── */}
+        {activeTab === 'coupons' && (
+          <div className="bg-white rounded-3xl border border-[#EADBCE] p-6 sm:p-8 shadow-xs space-y-6 animate-fade-in">
+            <AdminCoupons
+              coupons={coupons}
+              onAdd={onAddCoupon}
+              onUpdate={onUpdateCoupon}
+              onDelete={onDeleteCoupon}
+              notify={notify}
+            />
+          </div>
+        )}
+
+        {/* ── TAB: PROMOTIONS ── */}
+        {activeTab === 'promotions' && (
+          <div className="bg-white rounded-3xl border border-[#EADBCE] p-6 sm:p-8 shadow-xs space-y-6 animate-fade-in">
+            <AdminPromotions
+              promotions={promotions}
+              products={products}
+              user={user}
+              onAdd={onAddPromotion}
+              onUpdate={onUpdatePromotion}
+              onDelete={onDeletePromotion}
+              notify={notify}
+            />
           </div>
         )}
 

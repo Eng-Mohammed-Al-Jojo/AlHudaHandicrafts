@@ -53,8 +53,17 @@ service cloud.firestore {
                     && request.resource.data.phone.matches('^[0-9]{8,15}$')
                     && request.resource.data.source == 'storefront_whatsapp'
                     && request.resource.data.status == 'active'
-                    && request.resource.data.createdAt == request.time;
       allow read, update, delete: if isAdmin();
+    }
+
+    match /coupons/{couponId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /promotions/{promotionId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
     }
   }
 }

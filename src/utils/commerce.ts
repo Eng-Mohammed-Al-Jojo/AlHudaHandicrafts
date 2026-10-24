@@ -16,3 +16,27 @@ export function getFreeShippingStatus(total: unknown, value: unknown) {
 
   return { threshold, isFreeShipping, remaining, progress }
 }
+
+export function isProductOnSale(product: {
+  salePrice?: number
+  saleStartDate?: string
+  saleEndDate?: string
+}): boolean {
+  if (!product.salePrice || product.salePrice <= 0) return false
+  if (!product.saleStartDate || !product.saleEndDate) return false
+  const now = new Date()
+  const start = new Date(product.saleStartDate)
+  const end = new Date(product.saleEndDate)
+  // End of the day for saleEndDate
+  end.setHours(23, 59, 59, 999)
+  return now >= start && now <= end
+}
+
+export function getEffectiveProductPrice(product: {
+  price: number
+  salePrice?: number
+  saleStartDate?: string
+  saleEndDate?: string
+}): number {
+  return isProductOnSale(product) ? product.salePrice! : product.price
+}

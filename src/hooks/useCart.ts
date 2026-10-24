@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
-import type { Product, CartItem } from '../types'
+import type { Product, CartItem, Coupon } from '../types'
 import {
   normalizeCartQuantity,
   readPersistedCart,
@@ -20,19 +20,20 @@ function cartItemsToQuantities(items: CartItem[]): CartQuantityMap {
   return quantities
 }
 
+import { isProductOnSale, getEffectiveProductPrice } from '../utils/commerce'
+
 export function useCart() {
   const initializedRef = useRef(false)
   const entriesRef = useRef<CartQuantityMap>(Object.create(null))
   const itemsRef = useRef<CartItem[]>([])
 
-  // Read once during initialization. Product snapshots will turn the stored
-  // IDs and quantities back into current catalog items.
   if (!initializedRef.current) {
     entriesRef.current = readPersistedCart()
     initializedRef.current = true
   }
 
   const [items, setItems] = useState<CartItem[]>(itemsRef.current)
+  const [coupon, setCoupon] = useState<Coupon | null>(null)
 
   const commitCart = useCallback((nextItems: CartItem[]) => {
     const nextEntries = cartItemsToQuantities(nextItems)
@@ -67,7 +68,10 @@ export function useCart() {
       : item))
   }, [commitCart])
 
-  const clear = useCallback(() => commitCart([]), [commitCart])
+  const clear = useCallback(() => {
+    commitCart([])
+    setCoupon(null)
+  }, [commitCart])
 
   const syncWithProducts = useCallback((products: Product[]): CartSyncResult => {
     const catalog = new Map(products.map(product => [product.id, product]))
@@ -103,7 +107,13 @@ export function useCart() {
     return { removed, priceChanges }
   }, [commitCart])
 
-  const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0)
+  const total = items.reduce((sum, item) => {
+    const effectivePrice = getEffectiveProductPrice(item)
+    return sum + effectivePrice * item.quantity
+  }, 0)
+
+  const discountAmount = coupon ? (coupon.type === 'percentage' ? (total * coupon.value) / 100 : coupon.value) : 0
+  const finalTotal = Math.max(0, total - discountAmount)
   const count = items.reduce((sum, item) => sum + item.quantity, 0)
 
   return {
@@ -114,6 +124,10 @@ export function useCart() {
     clear,
     syncWithProducts,
     total,
+    discountAmount,
+    finalTotal,
+    coupon,
+    setCoupon,
     count,
   }
 }

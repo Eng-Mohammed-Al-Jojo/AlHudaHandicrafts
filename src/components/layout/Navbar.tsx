@@ -18,7 +18,7 @@ import {
 } from 'lucide-react'
 import type { CartItem, SiteSettings } from '../../types'
 import { useCurrency } from '../../context/CurrencyContext'
-import { getFreeShippingStatus } from '../../utils/commerce'
+import { getFreeShippingStatus, isProductOnSale, getEffectiveProductPrice } from '../../utils/commerce'
 
 interface Props {
   cartCount: number
@@ -375,9 +375,22 @@ export default function Navbar({
                           {item.name}
                         </h5>
                         <div className="flex items-center justify-between mt-2">
-                          <span className="text-sm font-bold text-[#8D6527]">
-                            {formatPrice(item.price * item.quantity)}
-                          </span>
+                          {(() => {
+                            const onSale = isProductOnSale(item)
+                            const effectivePrice = getEffectiveProductPrice(item)
+                            return (
+                              <div className="flex items-baseline gap-1.5" dir="ltr">
+                                <span className={`text-sm font-bold ${onSale ? 'text-red-600' : 'text-[#8D6527]'}`}>
+                                  {formatPrice(effectivePrice * item.quantity)}
+                                </span>
+                                {onSale && (
+                                  <span className="text-[11px] text-[#968B7E] line-through">
+                                    {formatPrice(item.price * item.quantity)}
+                                  </span>
+                                )}
+                              </div>
+                            )
+                          })()}
 
                           {/* Quantity Controls */}
                           <div className="flex items-center gap-2 bg-[#FAF7F2] border border-[#EADBCE] rounded-lg px-2 py-1">

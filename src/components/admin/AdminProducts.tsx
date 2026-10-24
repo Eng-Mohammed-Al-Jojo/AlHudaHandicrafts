@@ -34,6 +34,9 @@ const EMPTY_FORM = {
   name: '',
   description: '',
   price: '',
+  salePrice: '',
+  saleStartDate: '',
+  saleEndDate: '',
   categoryId: '',
   isAvailable: true,
   isPublished: true,
@@ -77,6 +80,9 @@ export default function AdminProducts({
       name: p.name,
       description: p.description,
       price: String(p.price),
+      salePrice: p.salePrice ? String(p.salePrice) : '',
+      saleStartDate: p.saleStartDate ?? '',
+      saleEndDate: p.saleEndDate ?? '',
       categoryId: p.categoryId,
       isAvailable: p.isAvailable,
       isPublished: p.isPublished,
@@ -173,6 +179,9 @@ export default function AdminProducts({
             name: draft.name.trim(),
             description: draft.description.trim(),
             price: Number(draft.price),
+            salePrice: draft.salePrice ? Number(draft.salePrice) : undefined,
+            saleStartDate: draft.saleStartDate || undefined,
+            saleEndDate: draft.saleEndDate || undefined,
             categoryId: draft.categoryId,
             categoryName: cat?.name ?? '',
             isAvailable: draft.isAvailable,
@@ -188,6 +197,9 @@ export default function AdminProducts({
             slug: draft.name.trim().toLowerCase().replace(/\s+/g, '-'),
             description: draft.description.trim(),
             price: Number(draft.price),
+            salePrice: draft.salePrice ? Number(draft.salePrice) : undefined,
+            saleStartDate: draft.saleStartDate || undefined,
+            saleEndDate: draft.saleEndDate || undefined,
             categoryId: draft.categoryId,
             categoryName: cat?.name ?? '',
             isAvailable: draft.isAvailable,
@@ -343,7 +355,23 @@ export default function AdminProducts({
                           </div>
                         </td>
                         <td className="p-4 text-[#685D52] font-medium">{p.categoryName}</td>
-                        <td className="p-4 font-bold text-[#8D6527]">{p.price} شيكل</td>
+                        <td className="p-4">
+                          {p.salePrice ? (
+                            <div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-bold text-red-600 text-sm">{p.salePrice} شيكل</span>
+                                <span className="text-xs text-[#968B7E] line-through">{p.price}</span>
+                              </div>
+                              {p.saleStartDate && p.saleEndDate && (
+                                <span className="text-[10px] text-[#968B7E] block mt-0.5">
+                                  {p.saleStartDate} إلى {p.saleEndDate}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="font-bold text-[#8D6527]">{p.price} شيكل</span>
+                          )}
+                        </td>
                         <td className="p-4">
                           <span className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-bold ${p.isAvailable ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
                             {p.isAvailable ? 'متوفر' : 'نفد'}
@@ -532,6 +560,42 @@ export default function AdminProducts({
                           placeholder="مثال: الأكثر طلباً"
                           className="w-full bg-[#FAF7F2] border border-[#EADBCE] rounded-xl px-3 py-2.5 text-sm text-[#221811] outline-none focus:border-[#8D6527] focus:bg-white transition-all"
                         />
+                      </div>
+                    </div>
+
+                    {/* Sale Price & Dates Section */}
+                    <div className="bg-[#FAF7F2] rounded-2xl p-4 border border-[#EADBCE] space-y-3">
+                      <p className="text-xs font-bold text-[#221811] m-0">عرض تخفيض لفترة محدودة (اختياري)</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-[11px] font-semibold text-[#685D52] mb-1">سعر التخفيض (شيكل)</label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={draft.salePrice}
+                            onChange={e => setDraft(d => ({ ...d, salePrice: e.target.value }))}
+                            placeholder="مثال: 220"
+                            className="w-full bg-white border border-[#EADBCE] rounded-xl px-3 py-2 text-xs text-[#221811] outline-none focus:border-[#8D6527] transition-all"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-semibold text-[#685D52] mb-1">يبدأ من تاريخ</label>
+                          <input
+                            type="date"
+                            value={draft.saleStartDate}
+                            onChange={e => setDraft(d => ({ ...d, saleStartDate: e.target.value }))}
+                            className="w-full bg-white border border-[#EADBCE] rounded-xl px-3 py-2 text-xs text-[#221811] outline-none focus:border-[#8D6527] transition-all"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-semibold text-[#685D52] mb-1">ينتهي في تاريخ</label>
+                          <input
+                            type="date"
+                            value={draft.saleEndDate}
+                            onChange={e => setDraft(d => ({ ...d, saleEndDate: e.target.value }))}
+                            className="w-full bg-white border border-[#EADBCE] rounded-xl px-3 py-2 text-xs text-[#221811] outline-none focus:border-[#8D6527] transition-all"
+                          />
+                        </div>
                       </div>
                     </div>
 

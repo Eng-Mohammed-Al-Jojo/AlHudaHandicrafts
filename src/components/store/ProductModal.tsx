@@ -15,6 +15,7 @@ import {
 import type { Product } from '../../types'
 import Modal from '../ui/Modal'
 import { useCurrency } from '../../context/CurrencyContext'
+import { isProductOnSale, getEffectiveProductPrice } from '../../utils/commerce'
 
 interface Props {
   product: Product
@@ -23,6 +24,8 @@ interface Props {
 }
 
 export default function ProductModal({ product, onAddToCart, onClose }: Props) {
+  const onSale = isProductOnSale(product)
+  const effectivePrice = getEffectiveProductPrice(product)
   const images = product.images.length > 0
     ? [...product.images].sort((a, b) => a.order - b.order)
     : [{ url: 'https://images.unsplash.com/photo-1595777457583-95e059d581b8?auto=format&fit=crop&w=800&q=80', alt: product.name, order: 0 }]
@@ -168,11 +171,18 @@ export default function ProductModal({ product, onAddToCart, onClose }: Props) {
               <span className="text-[10px] font-bold text-[#8D6527] uppercase tracking-wider">
                 {product.categoryName}
               </span>
-              {product.badge && (
-                <span className="bg-[#FAF7F2] border border-[#C59B4B]/40 text-[#8D6527] text-[10px] font-bold px-2.5 py-0.5 rounded-full shadow-sm">
-                  {product.badge}
-                </span>
-              )}
+              <div className="flex items-center gap-1.5">
+                {onSale && (
+                  <span className="bg-red-600 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full shadow-sm">
+                    عرض تخفيض ({Math.round(((product.price - product.salePrice!) / product.price) * 100)}%-)
+                  </span>
+                )}
+                {product.badge && (
+                  <span className="bg-[#FAF7F2] border border-[#C59B4B]/40 text-[#8D6527] text-[10px] font-bold px-2.5 py-0.5 rounded-full shadow-sm">
+                    {product.badge}
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Title */}
@@ -184,11 +194,18 @@ export default function ProductModal({ product, onAddToCart, onClose }: Props) {
             </h2>
 
             {/* Price */}
-            <div className="flex items-baseline gap-2 mb-4">
-              <strong className="text-2xl sm:text-3xl font-bold text-[#8D6527]" dir="ltr">{formatPrice(product.price * qty)}</strong>
+            <div className="flex items-baseline gap-2.5 mb-4">
+              <strong className={`text-2xl sm:text-3xl font-bold ${onSale ? 'text-red-600' : 'text-[#8D6527]'}`} dir="ltr">
+                {formatPrice(effectivePrice * qty)}
+              </strong>
+              {onSale && (
+                <span className="text-base text-[#968B7E] line-through font-normal" dir="ltr">
+                  {formatPrice(product.price * qty)}
+                </span>
+              )}
               {qty > 1 && (
                 <span className="text-xs text-[#968B7E]">
-                  ({formatPrice(product.price)} للقطعة)
+                  ({formatPrice(effectivePrice)} للقطعة)
                 </span>
               )}
             </div>

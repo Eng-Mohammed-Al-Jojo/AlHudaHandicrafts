@@ -3,6 +3,8 @@ import { Eye, Plus, Check } from 'lucide-react'
 import type { Product } from '../../types'
 import { useCurrency } from '../../context/CurrencyContext'
 
+import { isProductOnSale, getEffectiveProductPrice } from '../../utils/commerce'
+
 interface Props {
   product: Product
   onAddToCart: (product: Product) => void
@@ -13,6 +15,9 @@ export default function ProductCard({ product, onAddToCart, onQuickView }: Props
   const [imageLoaded, setImageLoaded] = useState(false)
   const [justAdded, setJustAdded] = useState(false)
   const { formatPrice } = useCurrency()
+
+  const onSale = isProductOnSale(product)
+  const effectivePrice = getEffectiveProductPrice(product)
   
   const mainImage = product.images.length > 0 
     ? [...product.images].sort((a, b) => a.order - b.order)[0]
@@ -54,11 +59,16 @@ export default function ProductCard({ product, onAddToCart, onQuickView }: Props
         )}
 
         {/* Badge Ribbon */}
-        {product.badge && (
+        {onSale ? (
+          <span className="absolute top-3 right-3 z-10 bg-red-600/95 backdrop-blur-md text-white text-[10px] font-bold px-2.5 py-1 rounded-full shadow-xs tracking-wide flex items-center gap-1">
+            <span>تخفيض</span>
+            <span className="text-[9px] opacity-90">({Math.round(((product.price - product.salePrice!) / product.price) * 100)}%-)</span>
+          </span>
+        ) : product.badge ? (
           <span className="absolute top-3 right-3 z-10 bg-[#24180E]/90 backdrop-blur-md text-[#DFB76C] text-[10px] font-bold px-3 py-1 rounded-full shadow-xs border border-[#C59B4B]/30 tracking-wide">
             {product.badge}
           </span>
-        )}
+        ) : null}
 
         {/* Not Available Overlay */}
         {!product.isAvailable && (
@@ -108,7 +118,16 @@ export default function ProductCard({ product, onAddToCart, onQuickView }: Props
 
         <div className="pt-3 border-t border-[#FAF7F2] flex items-center justify-between mt-auto">
           {/* Price */}
-          <span className="text-base sm:text-lg font-bold text-[#8D6527]" dir="ltr">{formatPrice(product.price)}</span>
+          <div className="flex items-baseline gap-1.5" dir="ltr">
+            <span className={`text-base sm:text-lg font-bold ${onSale ? 'text-red-600' : 'text-[#8D6527]'}`}>
+              {formatPrice(effectivePrice)}
+            </span>
+            {onSale && (
+              <span className="text-xs text-[#968B7E] line-through font-normal">
+                {formatPrice(product.price)}
+              </span>
+            )}
+          </div>
 
           {/* Add to Cart Button */}
           <button

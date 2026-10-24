@@ -165,6 +165,8 @@ const SETTINGS_COLLECTION = 'settings'
 const SETTINGS_DOCUMENT = 'store'
 const SUBSCRIBERS_COLLECTION = 'subscribers'
 const INVOICES_COLLECTION = 'invoices'
+const COUPONS_COLLECTION = 'coupons'
+const PROMOTIONS_COLLECTION = 'promotions'
 function normalizePaymentDetails(value: unknown, fallback: PaymentMethodDetails): PaymentMethodDetails {
   const saved = value && typeof value === 'object' ? value as Record<string, unknown> : {}
   return {
@@ -254,6 +256,9 @@ export function subscribeToProducts(
           slug: data.slug || '',
           description: data.description || '',
           price: Number(data.price) || 0,
+          salePrice: typeof data.salePrice === 'number' ? data.salePrice : (data.salePrice ? Number(data.salePrice) : undefined),
+          saleStartDate: data.saleStartDate || undefined,
+          saleEndDate: data.saleEndDate || undefined,
           categoryId: data.categoryId || '',
           categoryName: data.categoryName || '',
           isAvailable: data.isAvailable ?? true,
@@ -678,6 +683,78 @@ export function subscribeToSubscribers(
 export async function deleteSubscriberFromFirestore(id: string): Promise<void> {
   const docRef = doc(db, SUBSCRIBERS_COLLECTION, id)
   await deleteDoc(docRef)
+}
+
+// ─── FIRESTORE: Coupons & Promotions ──────────────────────────────────────────
+
+export function subscribeToCoupons(
+  onSuccess: (coupons: any[]) => void,
+  onError?: (err: Error) => void
+) {
+  const q = collection(db, COUPONS_COLLECTION)
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const list = snapshot.docs.map(docSnap => ({
+        id: docSnap.id,
+        ...docSnap.data()
+      }))
+      onSuccess(list)
+    },
+    (err) => {
+      console.warn('Firestore coupons listener error:', err)
+      if (onError) onError(err)
+    }
+  )
+}
+
+export async function addCouponToFirestore(coupon: any): Promise<string> {
+  const docRef = await addDoc(collection(db, COUPONS_COLLECTION), withoutUndefinedFields(coupon))
+  return docRef.id
+}
+
+export async function updateCouponInFirestore(id: string, patch: Partial<any>): Promise<void> {
+  const docRef = doc(db, COUPONS_COLLECTION, id)
+  await updateDoc(docRef, withoutUndefinedFields(patch))
+}
+
+export async function deleteCouponFromFirestore(id: string): Promise<void> {
+  await deleteDoc(doc(db, COUPONS_COLLECTION, id))
+}
+
+export function subscribeToPromotions(
+  onSuccess: (promotions: any[]) => void,
+  onError?: (err: Error) => void
+) {
+  const q = collection(db, PROMOTIONS_COLLECTION)
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const list = snapshot.docs.map(docSnap => ({
+        id: docSnap.id,
+        ...docSnap.data()
+      }))
+      onSuccess(list)
+    },
+    (err) => {
+      console.warn('Firestore promotions listener error:', err)
+      if (onError) onError(err)
+    }
+  )
+}
+
+export async function addPromotionToFirestore(promotion: any): Promise<string> {
+  const docRef = await addDoc(collection(db, PROMOTIONS_COLLECTION), withoutUndefinedFields(promotion))
+  return docRef.id
+}
+
+export async function updatePromotionInFirestore(id: string, patch: Partial<any>): Promise<void> {
+  const docRef = doc(db, PROMOTIONS_COLLECTION, id)
+  await updateDoc(docRef, withoutUndefinedFields(patch))
+}
+
+export async function deletePromotionFromFirestore(id: string): Promise<void> {
+  await deleteDoc(doc(db, PROMOTIONS_COLLECTION, id))
 }
 
 // ─── INITIAL SEEDING & SYNC HELPER ─────────────────────────────────────────────

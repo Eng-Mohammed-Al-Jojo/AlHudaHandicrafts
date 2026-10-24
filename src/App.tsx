@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import './index.css'
 
-import type { FirebaseUser, Product, Category, Order, OrderStatus, PaymentStatus, SiteSettings, NewsletterSubscriber, Invoice, InvoiceDraft, InvoiceSignature } from './types'
+import type { FirebaseUser, Product, Category, Order, OrderStatus, PaymentStatus, SiteSettings, NewsletterSubscriber, Invoice, InvoiceDraft, InvoiceSignature, Coupon, Promotion } from './types'
 import { DEFAULT_SITE_SETTINGS } from './types'
 import { MOCK_PRODUCTS, MOCK_CATEGORIES } from './data'
 
@@ -27,6 +27,14 @@ import {
   addInvoiceToFirestore,
   updateInvoiceInFirestore,
   deleteInvoiceFromFirestore,
+  subscribeToCoupons,
+  addCouponToFirestore,
+  updateCouponInFirestore,
+  deleteCouponFromFirestore,
+  subscribeToPromotions,
+  addPromotionToFirestore,
+  updatePromotionInFirestore,
+  deletePromotionFromFirestore,
   seedInitialDatabase,
   clearAllFirestoreData
 } from './firebase'
@@ -36,7 +44,7 @@ import { subscribeToSiteSettings, updateSiteSettings, signOutAdmin, observeAdmin
 import { useCart } from './hooks/useCart'
 import { useToast } from './hooks/useToast'
 import { getPublicCategories } from './utils/catalog'
-import { getFreeShippingStatus } from './utils/commerce'
+import { getFreeShippingStatus, getEffectiveProductPrice } from './utils/commerce'
 import { notifyNewOrder } from './utils/adminNotifications'
 
 import Navbar from './components/layout/Navbar'
@@ -200,6 +208,8 @@ export default function App() {
   const [unseenOrdersCount, setUnseenOrdersCount] = useState(0)
   const [subscribers, setSubscribers] = useState<NewsletterSubscriber[]>([])
   const [invoices, setInvoices] = useState<Invoice[]>([])
+  const [coupons, setCoupons] = useState<Coupon[]>([])
+  const [promotions, setPromotions] = useState<Promotion[]>([])
   const [dbConnected, setDbConnected] = useState(false)
   const [isLoadingInitialData, setIsLoadingInitialData] = useState(true)
   const [settings, setSettings] = useState<SiteSettings>(DEFAULT_SITE_SETTINGS)
@@ -268,10 +278,24 @@ export default function App() {
 
     const unsubSettings = subscribeToSiteSettings(setSettings, (err) => console.warn('Settings listener error:', err))
 
+    // 3. Coupons subscription (public – needed to validate coupon codes at checkout)
+    const unsubCoupons = subscribeToCoupons(
+      (items) => setCoupons(items as Coupon[]),
+      (err) => console.warn('Coupons listener error:', err)
+    )
+
+    // 4. Promotions subscription (public – displayed on store front)
+    const unsubPromotions = subscribeToPromotions(
+      (items) => setPromotions(items as Promotion[]),
+      (err) => console.warn('Promotions listener error:', err)
+    )
+
     return () => {
       unsubProducts()
       unsubCategories()
       unsubSettings()
+      unsubCoupons()
+      unsubPromotions()
     }
   }, [])
 
@@ -415,20 +439,25 @@ export default function App() {
         instructions: selectedPaymentMethod.instructions,
         paymentLink: selectedPaymentMethod.paymentLink,
       },
-      items: cart.items.map(i => ({
-        productId: i.id,
-        productName: i.name,
-        price: i.price,
-        quantity: i.quantity,
-        image: i.images[0]?.url ?? '',
-      })),
-      total: cart.total,
+      items: cart.items.map(i => {
+        const itemPrice = getEffectiveProductPrice(i)
+        return {
+          productId: i.id,
+          productName: i.name,
+          price: itemPrice,
+          quantity: i.quantity,
+          image: i.images[0]?.url ?? '',
+        }
+      }),
+      total: cart.finalTotal,
       itemsCount: cart.count,
       displayCurrency: currencyDetails.currency,
       displayRate: currencyDetails.rate,
       displayTotal: currencyDetails.displayedAmount,
       shippingStatus: isFreeShipping ? 'free' : 'standard',
       shippingThreshold: freeShippingLimit,
+      couponCode: details.couponCode,
+      discountAmount: details.discountAmount,
       status: 'جديد',
       createdAt: new Date().toISOString(),
     }
@@ -436,12 +465,15 @@ export default function App() {
     try {
       const orderId = await addOrderToFirestore(newOrderData)
       const orderItems = [...cart.items]
-      const orderTotal = cart.total
+      const orderTotal = cart.finalTotal
       cart.clear()
       setOrderConfirmation({ orderId })
       if (settings.orderRouting === 'whatsapp' && settings.whatsappNumber) {
         const lines = orderItems
-          .map(item => `- ${item.name} × ${item.quantity} (السعر الأساسي: ${item.price * item.quantity} ₪)`)
+          .map(item => {
+            const effPrice = getEffectiveProductPrice(item)
+            return `- ${item.name} × ${item.quantity} (${effPrice * item.quantity} ₪)`
+          })
           .join('\n')
         const message = [
           `طلب جديد من متجر ${settings.storeName}`,
@@ -478,6 +510,105 @@ export default function App() {
   }
 
   // ─── Admin Firestore CRUD Handlers ────────────────────────────────────────────
+
+  // Coupons
+  async function handleAddCoupon(c: Omit<Coupon, 'id'>): Promise<void> {
+    try {
+      await addCouponToFirestore(c)
+      // Realtime listener subscribeToCoupons automatically updates state without duplicates
+    } catch (err: any) {
+      console.error('Add coupon error:', err)
+      const isPermission = err?.code === 'permission-denied'
+      notify(
+        isPermission
+          ? 'تم رفض العملية: يرجى تسجيل الخروج ثم الدخول مجدداً بحساب الأدمن (huda@gmail.com).'
+          : `تعذر إضافة الكوبون: ${err?.message || 'تحققي من الاتصال'}`,
+        'error'
+      )
+      throw err
+    }
+  }
+
+  async function handleUpdateCoupon(id: string, patch: Partial<Coupon>): Promise<void> {
+    try {
+      await updateCouponInFirestore(id, patch)
+      notify('تم تحديث بيانات الكوبون بنجاح')
+    } catch (err: any) {
+      console.error('Update coupon error:', err)
+      notify(`تعذر تحديث الكوبون: ${err?.message || 'تحققي من الاتصال'}`, 'error')
+      throw err
+    }
+  }
+
+  async function handleDeleteCoupon(id: string): Promise<void> {
+    try {
+      await deleteCouponFromFirestore(id)
+      notify('تم حذف الكوبون بنجاح')
+    } catch (err) {
+      console.error('Delete coupon error:', err)
+      notify('تعذر حذف الكوبون.', 'error')
+      throw err
+    }
+  }
+
+  // Promotions
+  async function handleAddPromotion(p: Omit<Promotion, 'id'>): Promise<void> {
+    try {
+      await addPromotionToFirestore(p)
+      // Realtime listener subscribeToPromotions automatically updates state without duplicates
+    } catch (err: any) {
+      console.error('Add promotion error:', err)
+      const isPermission = err?.code === 'permission-denied'
+      notify(
+        isPermission
+          ? 'تم رفض العملية: يرجى تسجيل الخروج ثم الدخول مجدداً بحساب الأدمن (huda@gmail.com) لتحديث الصلاحيات.'
+          : `تعذر إضافة الترويج: ${err?.message || 'تحققي من الاتصال'}`,
+        'error'
+      )
+      throw err
+    }
+  }
+
+  async function handleUpdatePromotion(id: string, patch: Partial<Promotion>): Promise<void> {
+    try {
+      await updatePromotionInFirestore(id, patch)
+      notify('تم تحديث بيانات الترويج بنجاح')
+    } catch (err: any) {
+      console.error('Update promotion error:', err)
+      notify(`تعذر تحديث الترويج: ${err?.message || 'تحققي من الاتصال'}`, 'error')
+      throw err
+    }
+  }
+
+  async function handleDeletePromotion(id: string): Promise<void> {
+    try {
+      await deletePromotionFromFirestore(id)
+      notify('تم حذف الترويج بنجاح')
+    } catch (err) {
+      console.error('Delete promotion error:', err)
+      notify('تعذر حذف الترويج.', 'error')
+      throw err
+    }
+  }
+
+  // Coupon validation for checkout
+  async function handleApplyCoupon(code: string): Promise<boolean> {
+    if (!code) { cart.setCoupon(null); return false }
+    const now = new Date()
+    const found = coupons.find(
+      c => c.code === code.toUpperCase() &&
+        c.isActive &&
+        new Date(c.startDate) <= now &&
+        new Date(c.endDate) >= now
+    )
+    if (found) {
+      cart.setCoupon(found)
+      notify(`تم تطبيق كوبون الخصم «${found.code}» بنجاح 🎉`)
+      return true
+    }
+    cart.setCoupon(null)
+    return false
+  }
 
   // Products
   async function handleAddProduct(p: Product): Promise<void> {
@@ -703,6 +834,7 @@ export default function App() {
                 <StorePage
                   products={products}
                   categories={publicCategories}
+                  promotions={promotions}
                   onAddToCart={handleAddToCart}
                   settings={settings}
                 />
@@ -855,8 +987,8 @@ export default function App() {
             </AdminGuard>
           }
         />
-        <Route path="/admin/settings" element={<AdminGuard user={adminUser} ready={authReady}><AdminLayout user={adminUser!} onLogout={handleAdminLogout} unseenOrdersCount={unseenOrdersCount}><AdminSettings settings={settings} onSave={async next => { await updateSiteSettings(next); setSettings(next) }} notify={(msg, type) => notify(msg, type ?? 'success')} /></AdminLayout></AdminGuard>} />
-        <Route path="/admin/settings/:tab" element={<AdminGuard user={adminUser} ready={authReady}><AdminLayout user={adminUser!} onLogout={handleAdminLogout} unseenOrdersCount={unseenOrdersCount}><AdminSettings settings={settings} onSave={async next => { await updateSiteSettings(next); setSettings(next) }} notify={(msg, type) => notify(msg, type ?? 'success')} /></AdminLayout></AdminGuard>} />
+        <Route path="/admin/settings" element={<AdminGuard user={adminUser} ready={authReady}><AdminLayout user={adminUser!} onLogout={handleAdminLogout} unseenOrdersCount={unseenOrdersCount}><AdminSettings settings={settings} coupons={coupons} promotions={promotions} products={products} user={adminUser} onSave={async next => { await updateSiteSettings(next); setSettings(next) }} onAddCoupon={handleAddCoupon} onUpdateCoupon={handleUpdateCoupon} onDeleteCoupon={handleDeleteCoupon} onAddPromotion={handleAddPromotion} onUpdatePromotion={handleUpdatePromotion} onDeletePromotion={handleDeletePromotion} notify={(msg, type) => notify(msg, type ?? 'success')} /></AdminLayout></AdminGuard>} />
+        <Route path="/admin/settings/:tab" element={<AdminGuard user={adminUser} ready={authReady}><AdminLayout user={adminUser!} onLogout={handleAdminLogout} unseenOrdersCount={unseenOrdersCount}><AdminSettings settings={settings} coupons={coupons} promotions={promotions} products={products} user={adminUser} onSave={async next => { await updateSiteSettings(next); setSettings(next) }} onAddCoupon={handleAddCoupon} onUpdateCoupon={handleUpdateCoupon} onDeleteCoupon={handleDeleteCoupon} onAddPromotion={handleAddPromotion} onUpdatePromotion={handleUpdatePromotion} onDeletePromotion={handleDeletePromotion} notify={(msg, type) => notify(msg, type ?? 'success')} /></AdminLayout></AdminGuard>} />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
@@ -864,7 +996,7 @@ export default function App() {
 
       <ToastContainer toasts={toasts} dismiss={dismiss} />
       <PWAInstallPrompt />
-      {checkoutOpen && <CheckoutModal items={cart.items} total={cart.total} settings={settings} onSubmit={handleCheckout} onClose={() => setCheckoutOpen(false)} />}
+      {checkoutOpen && <CheckoutModal items={cart.items} total={cart.total} discountAmount={cart.discountAmount} finalTotal={cart.finalTotal} couponCode={cart.coupon?.code} onApplyCoupon={handleApplyCoupon} onRemoveCoupon={() => cart.setCoupon(null)} settings={settings} onSubmit={handleCheckout} onClose={() => setCheckoutOpen(false)} />}
       {orderConfirmation && <OrderConfirmationModal orderId={orderConfirmation.orderId} whatsappNumber={settings.whatsappNumber} storeName={settings.storeName} onClose={() => setOrderConfirmation(null)} />}
     </BrowserRouter>
     </CurrencyProvider>

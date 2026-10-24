@@ -30,6 +30,9 @@ export type Product = {
   isPublished: boolean
   images: ProductImage[]
   badge?: string
+  salePrice?: number
+  saleStartDate?: string
+  saleEndDate?: string
   createdAt?: string
   updatedAt?: string
 }
@@ -89,8 +92,35 @@ export type Order = {
   paymentDetails?: PaymentMethodDetails
   paymentReference?: string
   paymentConfirmedAt?: string
+  couponCode?: string
+  discountAmount?: number
   status: OrderStatus
   createdAt: string
+}
+
+export type CouponType = 'percentage' | 'fixed'
+
+export type Coupon = {
+  id: string
+  code: string
+  type: CouponType
+  value: number
+  startDate: string
+  endDate: string
+  usageLimit?: number
+  usedCount: number
+  isActive: boolean
+}
+
+export type Promotion = {
+  id: string
+  title: string
+  description?: string
+  imageUrl: string
+  targetLink?: string
+  startDate: string
+  endDate: string
+  isActive: boolean
 }
 
 export type InvoiceType = 'sale' | 'purchase'
