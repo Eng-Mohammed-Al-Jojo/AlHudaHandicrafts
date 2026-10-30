@@ -169,54 +169,56 @@ export default function AdminOverview({
             </p>
           </div>
 
-          <div className="flex flex-row sm:flex-col gap-2 sm:gap-2 shrink-0">
+          {/* Actions — stacked grid on mobile, compact column on desktop (never overflows) */}
+          <div className="grid w-full grid-cols-2 gap-2 shrink-0 sm:flex sm:w-auto sm:flex-col sm:items-stretch">
             <button
               onClick={() => onNavigate('products')}
-              className="flex-1 sm:flex-none rounded-full bg-[#8D6527] hover:bg-[#704F1E] text-white text-xs font-bold px-4 sm:px-5 py-2.5 sm:py-3 shadow-xs hover:shadow-md transition-all flex items-center justify-center gap-2"
+              className="col-span-2 sm:col-span-1 rounded-full bg-[#8D6527] hover:bg-[#704F1E] text-white text-xs font-bold px-4 sm:px-5 py-2.5 sm:py-3 shadow-xs hover:shadow-md transition-all flex items-center justify-center gap-2 whitespace-nowrap"
             >
-              <Package className="w-4 h-4" />
+              <Package className="w-4 h-4 shrink-0" />
               <span>إدارة المنتجات</span>
             </button>
             <button
               onClick={() => onNavigate('orders')}
-              className="flex-1 sm:flex-none rounded-full bg-[#FAF7F2] border border-[#EADBCE] hover:border-[#8D6527] text-[#221811] text-xs font-bold px-4 sm:px-5 py-2.5 sm:py-3 transition-all flex items-center justify-center gap-2"
+              className="rounded-full bg-[#FAF7F2] border border-[#EADBCE] hover:border-[#8D6527] text-[#221811] text-[11px] sm:text-xs font-bold px-2 sm:px-5 py-2.5 sm:py-3 transition-all flex items-center justify-center gap-1.5 sm:gap-2 whitespace-nowrap"
             >
-              <ShoppingBag className="w-4 h-4 text-[#8D6527]" />
+              <ShoppingBag className="w-4 h-4 text-[#8D6527] shrink-0" />
               <span>الطلبات ({orders.length})</span>
             </button>
             <button
               onClick={() => onNavigate('analytics')}
-              className="flex-1 sm:flex-none rounded-full bg-[#FAF7F2] border border-[#EADBCE] hover:border-[#8D6527] text-[#221811] text-xs font-bold px-4 sm:px-5 py-2.5 sm:py-3 transition-all flex items-center justify-center gap-2"
+              className="rounded-full bg-[#FAF7F2] border border-[#EADBCE] hover:border-[#8D6527] text-[#221811] text-[11px] sm:text-xs font-bold px-2 sm:px-5 py-2.5 sm:py-3 transition-all flex items-center justify-center gap-1.5 sm:gap-2 whitespace-nowrap"
             >
-              <BarChart2 className="w-4 h-4 text-[#8D6527]" />
-              <span>الإحصائيات والزيارات</span>
+              <BarChart2 className="w-4 h-4 text-[#8D6527] shrink-0" />
+              <span className="sm:hidden">الإحصائيات</span>
+              <span className="hidden sm:inline">الإحصائيات والزيارات</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* ── KPI Cards — 2 col on mobile, 4 col on xl ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      {/* ── KPI Cards — 2 col on mobile, 4 col on lg, 5 col on xl ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
         {KPI_CARDS.map(card => {
           const Icon = card.icon
           return (
             <div
               key={card.label}
-              className="bg-white rounded-2xl border border-[#EADBCE] p-4 sm:p-5 shadow-xs hover:border-[#C59B4B] transition-all"
+              className="bg-white rounded-2xl border border-[#EADBCE] p-3.5 sm:p-5 shadow-xs hover:border-[#C59B4B] transition-all min-w-0 overflow-hidden"
             >
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-[11px] sm:text-xs font-bold text-[#685D52] leading-tight">{card.label}</span>
+              <div className="flex items-center justify-between gap-2 mb-3">
+                <span className="text-[11px] sm:text-xs font-bold text-[#685D52] leading-tight min-w-0">{card.label}</span>
                 <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl ${card.iconBg} flex items-center justify-center shrink-0`}>
                   <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
                 </div>
               </div>
-              <div className="flex items-baseline gap-1 mb-1">
-                <strong className="text-2xl sm:text-3xl font-serif text-[#221811]" style={{ fontFamily: 'Amiri, serif' }}>
+              <div className="flex items-baseline gap-1 mb-1 flex-wrap">
+                <strong className="text-xl sm:text-3xl font-serif text-[#221811] leading-tight" style={{ fontFamily: 'Amiri, serif' }}>
                   {card.value}
                 </strong>
                 <small className="text-[10px] sm:text-xs text-[#685D52] font-semibold">{card.unit}</small>
               </div>
-              <p className={`text-[10px] sm:text-[11px] font-semibold m-0 flex items-center gap-1 ${card.noteColor}`}>
+              <p className={`text-[10px] sm:text-[11px] font-semibold m-0 flex items-start gap-1 ${card.noteColor}`}>
                 {card.noteIcon}
                 <span className="leading-tight">{card.note}</span>
               </p>
@@ -224,26 +226,26 @@ export default function AdminOverview({
           )
         })}
 
-        {/* WhatsApp friends list — full width on mobile, 1 col on desktop */}
+        {/* WhatsApp friends list — full width on mobile, 1 col from xl */}
         <div
           onClick={() => setShowSubscribersModal(true)}
-          className="col-span-2 lg:col-span-4 xl:col-span-1 xl:col-start-5 bg-white rounded-2xl border border-[#EADBCE] p-4 sm:p-5 shadow-xs hover:border-[#8D6527] transition-all cursor-pointer group hover:shadow-sm"
+          className="col-span-2 lg:col-span-4 xl:col-span-1 bg-white rounded-2xl border border-[#EADBCE] p-3.5 sm:p-5 shadow-xs hover:border-[#8D6527] transition-all cursor-pointer group hover:shadow-sm min-w-0"
         >
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between gap-2 mb-3">
             <span className="text-[11px] sm:text-xs font-bold text-[#685D52]">أصدقاء الهدى</span>
-            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center group-hover:scale-110 transition-transform">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center group-hover:scale-110 transition-transform shrink-0">
               <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
           </div>
           <div className="flex items-baseline gap-1 mb-1">
-            <strong className="text-2xl sm:text-3xl font-serif text-[#221811]" style={{ fontFamily: 'Amiri, serif' }}>
+            <strong className="text-xl sm:text-3xl font-serif text-[#221811] leading-tight" style={{ fontFamily: 'Amiri, serif' }}>
               {subscribers.length}
             </strong>
             <small className="text-[10px] sm:text-xs text-[#685D52] font-semibold">صديقة</small>
           </div>
           <p className="text-[10px] sm:text-[11px] text-[#8D6527] font-semibold m-0 flex items-center gap-1 group-hover:underline">
             <span>استعراض أرقام الواتساب</span>
-            <ArrowLeft className="w-3 h-3" />
+            <ArrowLeft className="w-3 h-3 shrink-0" />
           </p>
         </div>
       </div>

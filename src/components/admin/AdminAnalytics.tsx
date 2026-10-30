@@ -60,24 +60,30 @@ function formatDate(iso: string) {
 }
 
 function StatCard({
-  icon: Icon, label, value, sub, color,
+  icon: Icon, label, value, unit, sub, color, valueClassName = 'text-xl sm:text-2xl',
 }: {
   icon: React.ComponentType<{ className?: string }>
   label: string
   value: string | number
+  unit?: string
   sub?: string
   color: string
+  valueClassName?: string
 }) {
   return (
-    <div className="bg-white rounded-2xl border border-[#EADBCE] p-4 sm:p-5 shadow-xs flex items-start gap-4">
-      <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${color}`}>
-        <Icon className="w-5 h-5" />
+    <div className="bg-white rounded-2xl border border-[#EADBCE] p-3.5 sm:p-5 shadow-xs min-w-0 overflow-hidden">
+      {/* Icon + label on their own row so the value always gets the full width */}
+      <div className="flex items-center gap-2 mb-2">
+        <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0 ${color}`}>
+          <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
+        </div>
+        <p className="text-[11px] sm:text-xs text-[#685D52] m-0 font-medium leading-tight">{label}</p>
       </div>
-      <div className="min-w-0">
-        <p className="text-xs text-[#685D52] m-0 mb-0.5 font-medium truncate">{label}</p>
-        <p className="text-2xl font-bold text-[#221811] m-0 leading-tight">{value}</p>
-        {sub && <p className="text-[11px] text-[#968B7E] m-0 mt-1 truncate">{sub}</p>}
+      <div className="flex items-baseline gap-1 flex-wrap">
+        <span className={`${valueClassName} font-bold text-[#221811] leading-tight`}>{value}</span>
+        {unit && <span className="text-[11px] sm:text-xs font-semibold text-[#685D52]">{unit}</span>}
       </div>
+      {sub && <p className="text-[10px] sm:text-[11px] text-[#968B7E] m-0 mt-1 leading-snug">{sub}</p>}
     </div>
   )
 }
@@ -434,8 +440,8 @@ export default function AdminAnalytics() {
 
       {/* ── Filter Controls Card ── */}
       <div className="bg-white rounded-2xl border border-[#EADBCE] p-4 sm:p-5 shadow-xs space-y-4">
-        <div className="flex items-center justify-between gap-2 border-b border-[#FAF7F2] pb-3">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#FAF7F2] pb-3">
+          <div className="flex flex-wrap items-center gap-2">
             <Filter className="w-4 h-4 text-[#8D6527]" />
             <h3 className="text-sm font-bold text-[#221811] m-0">تصفية وفلاتر البيانات</h3>
             <span className="text-[11px] bg-[#FAF7F2] text-[#8D6527] font-bold px-2 py-0.5 rounded-full border border-[#EADBCE]">
@@ -588,29 +594,34 @@ export default function AdminAnalytics() {
           icon={Eye}
           label="إجمالي المشاهدات"
           value={metrics.totalViews.toLocaleString('ar')}
+          unit="مشاهدة"
           sub="مرات فتح وتصفح الصفحات"
           color="bg-blue-50 text-blue-600"
         />
         <StatCard
           icon={Users}
-          label="الزيارات الفريدة (الزوار)"
+          label="الزيارات الفريدة"
           value={metrics.uniqueSessions.toLocaleString('ar')}
+          unit="زيارة"
           sub="جلسات زوار مستقلة"
           color="bg-emerald-50 text-emerald-600"
         />
         <StatCard
           icon={TrendingUp}
           label="معدل التصفح"
-          value={`${metrics.pagesPerSession} صفحة`}
+          value={metrics.pagesPerSession}
+          unit="صفحة"
           sub="مشاهدة لكل زيارة في المتوسط"
           color="bg-[#FAF7F2] text-[#8D6527]"
         />
         <StatCard
           icon={Smartphone}
           label="الجهاز الأكثر زيارة"
-          value={`${metrics.desktopVisitsPct >= metrics.mobileVisitsPct ? 'كمبيوتر' : 'جوال'} (${Math.max(metrics.desktopVisitsPct, metrics.mobileVisitsPct)}%)`}
-          sub={`${metrics.deviceVisits.desktop} زيارة كمبيوتر • ${metrics.deviceVisits.mobile} زيارة جوال`}
+          value={metrics.desktopVisitsPct >= metrics.mobileVisitsPct ? 'كمبيوتر' : 'جوال'}
+          unit={`${Math.max(metrics.desktopVisitsPct, metrics.mobileVisitsPct)}%`}
+          sub={`${metrics.deviceVisits.desktop} كمبيوتر • ${metrics.deviceVisits.mobile} جوال`}
           color="bg-purple-50 text-purple-600"
+          valueClassName="text-base sm:text-xl"
         />
       </div>
 
@@ -675,7 +686,7 @@ export default function AdminAnalytics() {
         {/* Device Breakdown (1 col) */}
         <div className="bg-white rounded-2xl border border-[#EADBCE] p-5 shadow-xs flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between gap-2 mb-3">
+            <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
               <div className="flex items-center gap-2">
                 <Monitor className="w-4 h-4 text-[#C59B4B]" />
                 <h3 className="text-sm font-bold text-[#221811] m-0">الأجهزة المستخدمة</h3>
@@ -813,7 +824,7 @@ export default function AdminAnalytics() {
 
         {/* Top Pages List */}
         <div className="bg-white rounded-2xl border border-[#EADBCE] p-5 shadow-xs">
-          <div className="flex items-center justify-between gap-2 mb-4">
+          <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
             <div className="flex items-center gap-2">
               <BarChart2 className="w-4 h-4 text-[#C59B4B]" />
               <h3 className="text-sm font-bold text-[#221811] m-0">أكثر الصفحات مشاهدةً في الفلتر</h3>
@@ -835,8 +846,8 @@ export default function AdminAnalytics() {
                         <span className="w-5 h-5 rounded-full bg-[#FAF7F2] text-[#8D6527] text-[10px] font-bold flex items-center justify-center shrink-0">
                           {i + 1}
                         </span>
-                        <span className="font-bold text-[#221811] truncate">{page.title}</span>
-                        <span className="text-[10px] text-[#968B7E] font-mono truncate" dir="ltr">{page.path}</span>
+                        <span className="font-bold text-[#221811] truncate min-w-0">{page.title}</span>
+                        <span className="text-[10px] text-[#968B7E] font-mono truncate min-w-0 hidden sm:inline-block" dir="ltr">{page.path}</span>
                       </div>
                       <span className="font-bold text-[#8D6527] shrink-0 font-mono">{page.count} زيارة</span>
                     </div>

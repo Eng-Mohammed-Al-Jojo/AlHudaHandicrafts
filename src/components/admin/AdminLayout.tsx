@@ -79,6 +79,11 @@ const NAV_ITEMS: NavItem[] = [
   },
 ]
 
+// Only the 4 most-used destinations get a slot in the mobile bottom bar.
+// Everything else lives behind the "المزيد" button (opens the full drawer),
+// so the bar never overflows on small screens.
+const MOBILE_NAV_IDS = ['overview', 'products', 'orders', 'analytics']
+
 export default function AdminLayout({ user, onLogout, children, unseenOrdersCount = 0, onClearUnseenOrders }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [logoutConfirm, setLogoutConfirm] = useState(false)
@@ -111,6 +116,10 @@ export default function AdminLayout({ user, onLogout, children, unseenOrdersCoun
   function isActive(to: string) {
     return to === '/admin' ? currentPath === '/admin' : currentPath.startsWith(to)
   }
+
+  const mobileNavItems = NAV_ITEMS.filter(item => MOBILE_NAV_IDS.includes(item.id))
+  // Highlight "المزيد" when the current page lives outside the bottom bar
+  const moreActive = !mobileNavItems.some(item => isActive(item.to))
 
   return (
     <div className="min-h-screen bg-[#FAF7F2] text-[#221811] flex antialiased overflow-x-hidden">
@@ -323,17 +332,17 @@ export default function AdminLayout({ user, onLogout, children, unseenOrdersCoun
           (visible on < lg, hidden on lg+)
          ══════════════════════════════ */}
       <nav
-        className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-white border-t border-[#EADBCE] shadow-[0_-4px_20px_rgba(34,24,17,0.08)] flex items-center overflow-x-auto"
+        className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-white border-t border-[#EADBCE] shadow-[0_-4px_20px_rgba(34,24,17,0.08)] grid grid-cols-5 pb-[env(safe-area-inset-bottom)]"
         aria-label="التنقل السفلي"
       >
-        {NAV_ITEMS.map(item => {
+        {mobileNavItems.map(item => {
           const Icon = item.icon
           const active = isActive(item.to)
           return (
             <Link
               key={item.id}
               to={item.to}
-              className={`flex-1 min-w-[64px] flex flex-col items-center justify-center py-2.5 gap-1 no-underline transition-all ${
+              className={`flex flex-col items-center justify-center py-2.5 gap-1 no-underline transition-all min-w-0 ${
                 active ? 'text-[#8D6527]' : 'text-[#968B7E]'
               }`}
             >
@@ -348,12 +357,27 @@ export default function AdminLayout({ user, onLogout, children, unseenOrdersCoun
                   </span>
                 )}
               </div>
-              <span className={`text-[10px] font-semibold leading-none ${active ? 'text-[#8D6527]' : 'text-[#968B7E]'}`}>
+              <span className={`text-[10px] font-semibold leading-none truncate max-w-full ${active ? 'text-[#8D6527]' : 'text-[#968B7E]'}`}>
                 {item.label}
               </span>
             </Link>
           )
         })}
+
+        {/* "More" — opens the full drawer with every admin section */}
+        <button
+          type="button"
+          onClick={() => setSidebarOpen(true)}
+          className={`flex flex-col items-center justify-center py-2.5 gap-1 transition-all min-w-0 cursor-pointer ${
+            moreActive ? 'text-[#8D6527]' : 'text-[#968B7E]'
+          }`}
+          aria-label="المزيد من الأقسام"
+        >
+          <div className={`relative p-1.5 rounded-xl transition-all ${moreActive ? 'bg-[#8D6527]/10' : ''}`}>
+            <Menu className="w-5 h-5" />
+          </div>
+          <span className="text-[10px] font-semibold leading-none">المزيد</span>
+        </button>
       </nav>
 
       {/* ══════════════════════════════

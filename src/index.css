@@ -25,6 +25,9 @@
 
   /* Container */
   --spacing-container: min(1200px, calc(100% - 32px));
+
+  /* Extra-small breakpoint used by the admin header ("النظام متصل" label) */
+  --breakpoint-xs: 30rem;
 }
 
 /* ─── Base Styles ──────────────────────────────────────────────────────────── */
@@ -180,7 +183,7 @@ body {
   }
 }
 
-/* xs breakpoint helpers (< 480px) */
+/* ─── Print ────────────────────────────────────────────────────────────────── */
 @media print {
   body * {
     visibility: hidden !important;
