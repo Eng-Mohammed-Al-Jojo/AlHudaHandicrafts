@@ -17,6 +17,7 @@ import {
   X,
   Phone,
   Calendar,
+  BarChart2,
 } from 'lucide-react'
 import type { Product, Order, NewsletterSubscriber, Invoice } from '../../types'
 import Modal from '../ui/Modal'
@@ -182,6 +183,13 @@ export default function AdminOverview({
             >
               <ShoppingBag className="w-4 h-4 text-[#8D6527]" />
               <span>الطلبات ({orders.length})</span>
+            </button>
+            <button
+              onClick={() => onNavigate('analytics')}
+              className="flex-1 sm:flex-none rounded-full bg-[#FAF7F2] border border-[#EADBCE] hover:border-[#8D6527] text-[#221811] text-xs font-bold px-4 sm:px-5 py-2.5 sm:py-3 transition-all flex items-center justify-center gap-2"
+            >
+              <BarChart2 className="w-4 h-4 text-[#8D6527]" />
+              <span>الإحصائيات والزيارات</span>
             </button>
           </div>
         </div>

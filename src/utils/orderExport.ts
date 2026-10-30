@@ -7,8 +7,7 @@ function exportDate(date: string) {
 
 /** Creates a real .xlsx file from the currently filtered order list. */
 export async function exportOrdersToExcel(orders: Order[]) {
-  // Keep the spreadsheet engine out of the storefront's initial bundle.
-  const XLSX = await import('xlsx')
+  // Prepare data rows first
   const rows = orders.map((order, index) => ({
     '#': index + 1,
     'رقم الطلب': order.id,
@@ -27,13 +26,24 @@ export async function exportOrdersToExcel(orders: Order[]) {
     'حالة الشحن': order.shippingStatus === 'free' ? 'مجاني' : order.shippingStatus === 'standard' ? 'عادي' : '—',
     'عدد القطع': order.itemsCount,
     'الإجمالي (شيكل)': order.total,
-    'ملاحظات': order.notes ?? '',
+    'ملاحظات': order.notes ?? ''
   }))
 
-  const sheet = XLSX.utils.json_to_sheet(rows)
-  sheet['!cols'] = [{ wch: 6 }, { wch: 24 }, { wch: 22 }, { wch: 20 }, { wch: 18 }, { wch: 24 }, { wch: 18 }, { wch: 18 }, { wch: 36 }, { wch: 16 }, { wch: 44 }, { wch: 14 }, { wch: 24 }, { wch: 16 }, { wch: 16 }, { wch: 12 }, { wch: 18 }, { wch: 52 }]
-  sheet['!views'] = [{ rightToLeft: true }]
-  const workbook = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(workbook, sheet, 'الطلبات')
-  XLSX.writeFile(workbook, `طلبات-متجر-الهدى-${new Date().toISOString().slice(0, 10)}.xlsx`)
+  // Load ExcelJS dynamically to keep it out of the initial bundle
+  const ExcelJS = await import('exceljs')
+  const workbook = new ExcelJS.Workbook()
+  const sheet = workbook.addWorksheet('الطلبات')
+
+  // Define column widths (approximate Arabic text widths)
+  const widths = [6, 24, 22, 20, 18, 24, 18, 18, 36, 16, 44, 14, 24, 16, 16, 12, 18, 52]
+  sheet.columns = Object.keys(rows[0]).map((key, idx) => ({ header: key, key, width: widths[idx] || 15 }))
+
+  // Add data rows
+  sheet.addRows(rows)
+
+  // Right‑to‑left view for Arabic layout
+  sheet.views = [{ rightToLeft: true }]
+
+  // Write the file
+  await workbook.xlsx.writeFile(`طلبات-متجر-الهدى-${new Date().toISOString().slice(0, 10)}.xlsx`)
 }

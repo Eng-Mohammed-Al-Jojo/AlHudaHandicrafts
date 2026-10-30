@@ -265,6 +265,7 @@ export function subscribeToProducts(
           isPublished: data.isPublished ?? true,
           images: Array.isArray(data.images) ? data.images : [],
           badge: data.badge || undefined,
+          order: typeof data.order === 'number' ? data.order : undefined,
           createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : (data.createdAt || ''),
           updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : (data.updatedAt || ''),
         } as Product
@@ -524,13 +525,33 @@ export function subscribeToOrders(
   )
 }
 
-/** Add a new order directly to Firestore. */
+/** Add a new order directly to Firestore with server‑side validation. */
 export async function addOrderToFirestore(order: Omit<Order, 'id'>): Promise<string> {
-  const colRef = collection(db, ORDERS_COLLECTION)
-  const docRef = await addDoc(colRef, withoutUndefinedFields({
+  // Normalize items to ensure consistent shape
+  const items = normalizeOrderItems(order.items)
+
+  // Compute total from items (price * quantity)
+  const derivedTotal = items.reduce((sum, item) => {
+    const price = Number(item.price)
+    const qty = Number(item.quantity) ?? 1
+    return sum + (Number.isFinite(price) ? price * qty : 0)
+  }, 0)
+  const safeTotal = Math.max(0, derivedTotal)
+
+  // Verify client‑provided total (if any) matches the derived total within a small tolerance
+  if (order.total !== undefined && Math.abs(order.total - safeTotal) > 0.01) {
+    throw new Error('قيمة الطلب غير صالحة: لا تتطابق مع مجموع العناصر.')
+  }
+
+  const orderToSave = {
     ...order,
+    items,
+    total: safeTotal,
     createdAt: serverTimestamp(),
-  }))
+  }
+
+  const colRef = collection(db, ORDERS_COLLECTION)
+  const docRef = await addDoc(colRef, withoutUndefinedFields(orderToSave))
   return docRef.id
 }
 

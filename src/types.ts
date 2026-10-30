@@ -33,6 +33,7 @@ export type Product = {
   salePrice?: number
   saleStartDate?: string
   saleEndDate?: string
+  order?: number
   createdAt?: string
   updatedAt?: string
 }

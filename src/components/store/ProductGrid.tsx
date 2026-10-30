@@ -17,6 +17,7 @@ interface Props {
 }
 
 const SORT_OPTIONS = [
+  { value: 'custom', label: 'الترتيب المخصص' },
   { value: 'newest', label: 'الأحدث أولاً' },
   { value: 'price-asc', label: 'السعر: من الأقل للأعلى' },
   { value: 'price-desc', label: 'السعر: من الأعلى للأقل' },
@@ -50,7 +51,7 @@ export default function ProductGrid({
 }: Props) {
   const [query, setQuery] = useState(initialQuery)
   const [selectedCat, setSelectedCat] = useState(initialCategory)
-  const [sort, setSort] = useState('newest')
+  const [sort, setSort] = useState('custom')
   const [page, setPage] = useState(1)
   const [quickView, setQuickView] = useState<Product | null>(null)
   const sectionRef = useRef<HTMLElement>(null)
@@ -84,7 +85,13 @@ export default function ProductGrid({
       case 'price-asc':  return [...list].sort((a, b) => a.price - b.price)
       case 'price-desc': return [...list].sort((a, b) => b.price - a.price)
       case 'name':       return [...list].sort((a, b) => a.name.localeCompare(b.name))
-      default:           return [...list].sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))
+      case 'newest':     return [...list].sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))
+      default:           return [...list].sort((a, b) => {
+        const ao = a.order ?? 9999
+        const bo = b.order ?? 9999
+        if (ao !== bo) return ao - bo
+        return a.name.localeCompare(b.name)
+      })
     }
   }, [published, selectedCat, query, sort])
 

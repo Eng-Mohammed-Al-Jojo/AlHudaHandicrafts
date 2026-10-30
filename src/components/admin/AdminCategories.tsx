@@ -1,5 +1,5 @@
 import { useState, useRef, type ChangeEvent, type FormEvent } from 'react'
-import { Plus, Edit3, Trash2, Layers, Sparkles, X, AlertCircle, Upload, Link as LinkIcon, Image as ImageIcon, Loader2 } from 'lucide-react'
+import { Plus, Edit3, Trash2, Layers, Sparkles, X, AlertCircle, Upload, Link as LinkIcon, Image as ImageIcon, Loader2, ArrowUp, ArrowDown } from 'lucide-react'
 import type { Category, FirebaseUser, Product } from '../../types'
 import { uploadCategoryImage } from '../../firebase'
 import Modal from '../ui/Modal'
@@ -211,6 +211,28 @@ export default function AdminCategories({ categories, products, user, onAdd, onU
   const linkedProducts = deleteId ? products.filter(product => product.categoryId === deleteId) : []
   const targetCategories = deleteId ? categories.filter(category => category.id !== deleteId) : []
 
+  // Sorted list used for ordering logic
+  const sortedCategories = [...categories].sort((a, b) => a.order - b.order)
+
+  async function moveCategory(id: string, direction: 'up' | 'down') {
+    const idx = sortedCategories.findIndex(c => c.id === id)
+    if (idx === -1) return
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1
+    if (targetIdx < 0 || targetIdx >= sortedCategories.length) return
+
+    const current = sortedCategories[idx]
+    const neighbour = sortedCategories[targetIdx]
+
+    try {
+      await Promise.all([
+        onUpdate({ ...current, order: neighbour.order }),
+        onUpdate({ ...neighbour, order: current.order }),
+      ])
+    } catch {
+      notify('تعذّر تغيير ترتيب الأقسام، يرجى المحاولة مجدداً.', 'error')
+    }
+  }
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto animate-fade-in">
       
@@ -240,7 +262,7 @@ export default function AdminCategories({ categories, products, user, onAdd, onU
 
       {/* Categories Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {[...categories].sort((a, b) => a.order - b.order).map(cat => (
+        {sortedCategories.map(cat => (
           <div
             key={cat.id}
             className="bg-white rounded-2xl border border-[#EADBCE] overflow-hidden shadow-xs hover:border-[#DFB76C] transition-all flex flex-col justify-between"
@@ -287,21 +309,39 @@ export default function AdminCategories({ categories, products, user, onAdd, onU
               </div>
 
               {/* Action Buttons */}
-              <div className="pt-4 mt-4 border-t border-[#FAF7F2] flex items-center justify-end gap-2">
-                <button
-                  onClick={() => openEdit(cat)}
-                  className="w-8 h-8 rounded-lg border border-[#EADBCE] hover:border-[#8D6527] text-[#685D52] hover:text-[#8D6527] flex items-center justify-center transition-colors cursor-pointer"
-                  title="تعديل القسم"
-                >
-                  <Edit3 className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => openDeleteDialog(cat.id)}
-                  className="w-8 h-8 rounded-lg border border-[#EADBCE] hover:border-red-300 text-[#685D52] hover:text-red-600 hover:bg-red-50 flex items-center justify-center transition-colors cursor-pointer"
-                  title="حذف القسم"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+              <div className="pt-4 mt-4 border-t border-[#FAF7F2] flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => moveCategory(cat.id, 'up')}
+                    className="w-8 h-8 rounded-lg border border-[#EADBCE] hover:border-[#8D6527] text-[#685D52] hover:text-[#8D6527] flex items-center justify-center transition-colors cursor-pointer"
+                    title="تحريك للأعلى"
+                  >
+                    <ArrowUp className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => moveCategory(cat.id, 'down')}
+                    className="w-8 h-8 rounded-lg border border-[#EADBCE] hover:border-[#8D6527] text-[#685D52] hover:text-[#8D6527] flex items-center justify-center transition-colors cursor-pointer"
+                    title="تحريك للأسفل"
+                  >
+                    <ArrowDown className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => openEdit(cat)}
+                    className="w-8 h-8 rounded-lg border border-[#EADBCE] hover:border-[#8D6527] text-[#685D52] hover:text-[#8D6527] flex items-center justify-center transition-colors cursor-pointer"
+                    title="تعديل القسم"
+                  >
+                    <Edit3 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => openDeleteDialog(cat.id)}
+                    className="w-8 h-8 rounded-lg border border-[#EADBCE] hover:border-red-300 text-[#685D52] hover:text-red-600 hover:bg-red-50 flex items-center justify-center transition-colors cursor-pointer"
+                    title="حذف القسم"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             </div>
 

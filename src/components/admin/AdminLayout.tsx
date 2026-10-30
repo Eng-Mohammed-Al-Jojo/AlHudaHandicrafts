@@ -22,6 +22,7 @@ import {
   ChevronDown,
   Ticket,
   Sparkles,
+  BarChart2,
 } from 'lucide-react'
 import type { FirebaseUser } from '../../types'
 import Modal from '../ui/Modal'
@@ -68,6 +69,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'orders',     label: 'الطلبات',     icon: ShoppingBag,     to: '/admin/orders' },
   { id: 'invoices',   label: 'الفواتير',    icon: ReceiptText,     to: '/admin/invoices' },
   { id: 'customers',  label: 'الزبائن',     icon: Users,           to: '/admin/customers' },
+  { id: 'analytics',  label: 'الإحصائيات', icon: BarChart2,        to: '/admin/analytics' },
   {
     id: 'settings',
     label: 'الإعدادات',

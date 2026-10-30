@@ -14,6 +14,9 @@ import {
   EyeOff,
   CheckCircle2,
   Package,
+  ArrowUp,
+  ArrowDown,
+  Layers,
 } from 'lucide-react'
 import type { Product, Category, FirebaseUser } from '../../types'
 import { uploadProductImage } from '../../firebase'
@@ -27,6 +30,7 @@ interface Props {
   onAdd: (p: Product) => Promise<void>
   onDelete: (id: string) => Promise<void>
   onUpdate: (p: Product) => Promise<void>
+  onReorder?: (products: Product[]) => Promise<void>
   notify: (msg: string, type?: 'success' | 'error') => void
 }
 
@@ -50,6 +54,7 @@ export default function AdminProducts({
   onAdd,
   onDelete,
   onUpdate,
+  onReorder,
   notify,
 }: Props) {
   const [showForm, setShowForm] = useState(false)
@@ -63,6 +68,7 @@ export default function AdminProducts({
   const [isDeleting, setIsDeleting] = useState(false)
   const [imageDeleteTarget, setImageDeleteTarget] = useState<{ kind: 'saved' | 'pending'; index: number } | null>(null)
   const [search, setSearch] = useState('')
+  const [reordering, setReordering] = useState(false)
 
   function openNewForm() {
     setEditing(null)
@@ -205,6 +211,10 @@ export default function AdminProducts({
             isAvailable: draft.isAvailable,
             isPublished: draft.isPublished,
             badge: draft.badge.trim() || undefined,
+            order: (() => {
+              const catProds = products.filter(p => p.categoryId === draft.categoryId)
+              return catProds.length > 0 ? Math.max(...catProds.map(p => p.order ?? 0)) + 1 : 0
+            })(),
             images: images.length > 0 ? images : [
               { url: 'https://images.unsplash.com/photo-1595777457583-95e059d581b8?auto=format&fit=crop&w=800&q=80', alt: draft.name, order: 0 },
             ],
@@ -249,10 +259,67 @@ export default function AdminProducts({
     }
   }
 
-  const filtered = products.filter(p =>
+  // Sort products by `order` (ascending), then alphabetically as fallback
+  const sortedProducts = [...products].sort((a, b) => {
+    const ao = a.order ?? 9999
+    const bo = b.order ?? 9999
+    if (ao !== bo) return ao - bo
+    return a.name.localeCompare(b.name)
+  })
+
+  const filtered = sortedProducts.filter(p =>
     p.name.toLowerCase().includes(search.toLowerCase()) ||
     p.categoryName.toLowerCase().includes(search.toLowerCase())
   )
+
+  async function moveProduct(id: string, direction: 'up' | 'down') {
+    if (reordering) return
+
+    // Find the product
+    const product = sortedProducts.find(p => p.id === id)
+    if (!product) return
+
+    // Get only products in the same category, currently sorted
+    const catItems = sortedProducts.filter(p => p.categoryId === product.categoryId)
+
+    const idx = catItems.findIndex(p => p.id === id)
+    if (idx === -1) return
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1
+    if (targetIdx < 0 || targetIdx >= catItems.length) return
+
+    // Create a new array with the two items swapped
+    const newItems = [...catItems]
+    const temp = newItems[idx]
+    newItems[idx] = newItems[targetIdx]
+    newItems[targetIdx] = temp
+
+    // Give each product an explicit sequential order (0, 1, 2, ...)
+    const itemsWithNewOrder = newItems.map((item, i) => ({
+      ...item,
+      order: i,
+    }))
+
+    // Keep all items whose order changed
+    const changed = itemsWithNewOrder.filter(item => {
+      const orig = catItems.find(c => c.id === item.id)
+      return orig?.order !== item.order
+    })
+
+    if (changed.length === 0) return
+
+    setReordering(true)
+    try {
+      if (onReorder) {
+        await onReorder(changed)
+      } else {
+        await Promise.all(changed.map(p => onUpdate(p)))
+      }
+    } catch {
+      notify('تعذّر تغيير الترتيب، يرجى المحاولة مجدداً.', 'error')
+    } finally {
+      setReordering(false)
+    }
+  }
   const imageDeletePreview = imageDeleteTarget
     ? imageDeleteTarget.kind === 'saved'
       ? savedImageUrls[imageDeleteTarget.index]
@@ -303,7 +370,7 @@ export default function AdminProducts({
         )}
       </div>
 
-      {/* ── Products — Desktop Table ── */}
+      {/* ── Products — Grouped by Category ── */}
       {filtered.length === 0 ? (
         <div className="bg-white rounded-2xl sm:rounded-3xl border border-[#EADBCE] p-12 text-center shadow-xs">
           <div className="w-14 h-14 rounded-2xl bg-[#FAF7F2] text-[#8D6527] flex items-center justify-center mx-auto mb-3">
@@ -314,159 +381,223 @@ export default function AdminProducts({
             {search ? 'لم يتطابق أي منتج مع بحثكِ.' : 'أضيفي أول منتج لتظهر هنا.'}
           </p>
         </div>
-      ) : (
-        <>
-          {/* Desktop Table */}
-          <div className="hidden sm:block bg-white rounded-3xl border border-[#EADBCE] overflow-hidden shadow-xs">
-            <div className="overflow-x-auto">
+      ) : (() => {
+        // Build groups: categories that have products in filtered list
+        const catOrder = [...categories].sort((a, b) => a.order - b.order)
+        const groups = catOrder
+          .map(cat => ({
+            cat,
+            items: filtered
+              .filter(p => p.categoryId === cat.id)
+              .sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999)),
+          }))
+          .filter(g => g.items.length > 0)
+
+        // Uncategorised products (category deleted etc.)
+        const categorisedIds = new Set(groups.flatMap(g => g.items.map(p => p.id)))
+        const uncategorised = filtered.filter(p => !categorisedIds.has(p.id))
+
+        const renderRow = (p: typeof filtered[0], catItems: typeof filtered, isFirst: boolean, isLast: boolean) => {
+          const img = p.images[0]?.url
+          return (
+            <tr key={p.id} className="hover:bg-[#FAF7F2]/40 transition-colors">
+              <td className="p-3.5">
+                <div className="flex items-center gap-3">
+                  {img ? (
+                    <img src={img} alt="" className="w-11 h-11 rounded-xl object-cover border border-[#EADBCE] bg-[#FAF7F2] shrink-0" />
+                  ) : (
+                    <div className="w-11 h-11 rounded-xl bg-[#FAF7F2] border border-[#EADBCE] flex items-center justify-center text-[#968B7E] shrink-0">
+                      <ImageIcon className="w-4 h-4" />
+                    </div>
+                  )}
+                  <div>
+                    <p className="font-bold text-[#221811] m-0 text-sm">{p.name}</p>
+                    {p.badge && (
+                      <span className="inline-block bg-[#FAF7F2] border border-[#C59B4B]/30 text-[#8D6527] text-[10px] font-bold px-2 py-0.5 rounded-full mt-0.5">
+                        {p.badge}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </td>
+              <td className="p-3.5">
+                {p.salePrice ? (
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-bold text-red-600 text-sm">{p.salePrice} ₪</span>
+                      <span className="text-xs text-[#968B7E] line-through">{p.price}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <span className="font-bold text-[#8D6527]">{p.price} ₪</span>
+                )}
+              </td>
+              <td className="p-3.5">
+                <span className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-bold ${p.isAvailable ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                  {p.isAvailable ? 'متوفر' : 'نفد'}
+                </span>
+              </td>
+              <td className="p-3.5">
+                <span className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-bold ${p.isPublished ? 'bg-blue-50 text-blue-800 border border-blue-200' : 'bg-gray-100 text-gray-700 border border-gray-200'}`}>
+                  {p.isPublished ? 'منشور' : 'مسودة'}
+                </span>
+              </td>
+              <td className="p-3.5">
+                {/* Order arrows — within same category only */}
+                <div className="flex items-center justify-center gap-1">
+                  <button
+                    disabled={isFirst || reordering}
+                    onClick={() => moveProduct(p.id, 'up')}
+                    className="w-7 h-7 rounded-lg border border-[#EADBCE] hover:border-[#8D6527] text-[#685D52] hover:text-[#8D6527] flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    title="تحريك للأعلى"
+                  >
+                    <ArrowUp className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    disabled={isLast || reordering}
+                    onClick={() => moveProduct(p.id, 'down')}
+                    className="w-7 h-7 rounded-lg border border-[#EADBCE] hover:border-[#8D6527] text-[#685D52] hover:text-[#8D6527] flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    title="تحريك للأسفل"
+                  >
+                    <ArrowDown className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </td>
+              <td className="p-3.5">
+                <div className="flex items-center justify-center gap-1.5">
+                  <button
+                    onClick={() => openEditForm(p)}
+                    className="w-7 h-7 rounded-lg border border-[#EADBCE] hover:border-[#8D6527] text-[#685D52] hover:text-[#8D6527] flex items-center justify-center transition-colors"
+                    title="تعديل المنتج"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setDeleteId(p.id)}
+                    className="w-7 h-7 rounded-lg border border-[#EADBCE] hover:border-red-300 text-[#685D52] hover:text-red-600 hover:bg-red-50 flex items-center justify-center transition-colors"
+                    title="حذف المنتج"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </td>
+            </tr>
+          )
+        }
+
+        const renderMobileCard = (p: typeof filtered[0], isFirst: boolean, isLast: boolean) => {
+          const img = p.images[0]?.url
+          return (
+            <div key={p.id} className="bg-white rounded-xl border border-[#EADBCE] p-3.5 flex items-start gap-3">
+              {img ? (
+                <img src={img} alt="" className="w-14 h-14 rounded-xl object-cover border border-[#EADBCE] shrink-0" />
+              ) : (
+                <div className="w-14 h-14 rounded-xl bg-[#FAF7F2] border border-[#EADBCE] flex items-center justify-center text-[#968B7E] shrink-0">
+                  <ImageIcon className="w-5 h-5" />
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="font-bold text-[#221811] m-0 text-sm leading-tight">{p.name}</p>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button disabled={isFirst || reordering} onClick={() => moveProduct(p.id, 'up')}
+                      className="w-7 h-7 rounded-lg border border-[#EADBCE] hover:border-[#8D6527] text-[#685D52] hover:text-[#8D6527] flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                      title="تحريك للأعلى">
+                      <ArrowUp className="w-3.5 h-3.5" />
+                    </button>
+                    <button disabled={isLast || reordering} onClick={() => moveProduct(p.id, 'down')}
+                      className="w-7 h-7 rounded-lg border border-[#EADBCE] hover:border-[#8D6527] text-[#685D52] hover:text-[#8D6527] flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                      title="تحريك للأسفل">
+                      <ArrowDown className="w-3.5 h-3.5" />
+                    </button>
+                    <button onClick={() => openEditForm(p)}
+                      className="w-7 h-7 rounded-lg border border-[#EADBCE] hover:border-[#8D6527] text-[#685D52] hover:text-[#8D6527] flex items-center justify-center transition-colors">
+                      <Edit3 className="w-3.5 h-3.5" />
+                    </button>
+                    <button onClick={() => setDeleteId(p.id)}
+                      className="w-7 h-7 rounded-lg border border-[#EADBCE] hover:border-red-300 text-[#685D52] hover:text-red-600 hover:bg-red-50 flex items-center justify-center transition-colors">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                  <span className="font-bold text-[#8D6527] text-sm">{p.price} ₪</span>
+                  <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold ${p.isAvailable ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                    <CheckCircle2 className="w-3 h-3" />
+                    {p.isAvailable ? 'متوفر' : 'نفد'}
+                  </span>
+                  <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold ${p.isPublished ? 'bg-blue-50 text-blue-800 border border-blue-200' : 'bg-gray-100 text-gray-700 border border-gray-200'}`}>
+                    {p.isPublished ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                    {p.isPublished ? 'منشور' : 'مسودة'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )
+        }
+
+        const renderGroup = (title: string, items: typeof filtered, catImg?: string) => (
+          <div key={title} className="bg-white rounded-2xl border border-[#EADBCE] overflow-hidden shadow-xs">
+            {/* Category Header */}
+            <div className="flex items-center gap-3 px-5 py-3.5 bg-[#FAF7F2] border-b border-[#EADBCE]">
+              {catImg ? (
+                <img src={catImg} alt={title} className="w-8 h-8 rounded-lg object-cover border border-[#EADBCE] shrink-0" />
+              ) : (
+                <div className="w-8 h-8 rounded-lg bg-[#EADBCE] flex items-center justify-center shrink-0">
+                  <Layers className="w-4 h-4 text-[#8D6527]" />
+                </div>
+              )}
+              <div className="flex-1">
+                <h3 className="font-serif text-base font-bold text-[#221811] m-0" style={{ fontFamily: 'Amiri, serif' }}>
+                  {title}
+                </h3>
+              </div>
+              <span className="bg-[#8D6527]/10 text-[#8D6527] text-[11px] font-bold px-2.5 py-1 rounded-full">
+                {items.length} {items.length === 1 ? 'منتج' : 'منتجات'}
+              </span>
+            </div>
+
+            {/* Desktop Table */}
+            <div className="hidden sm:block overflow-x-auto">
               <table className="w-full text-right text-xs">
-                <thead className="bg-[#FAF7F2] text-[#685D52] font-bold border-b border-[#EADBCE]">
+                <thead className="bg-[#FAF7F2]/50 text-[#685D52] font-semibold border-b border-[#EADBCE]">
                   <tr>
-                    <th className="p-4">المنتج</th>
-                    <th className="p-4">القسم</th>
-                    <th className="p-4">السعر</th>
-                    <th className="p-4">المخزن</th>
-                    <th className="p-4">النشر</th>
-                    <th className="p-4 text-center">الإجراءات</th>
+                    <th className="px-4 py-2.5">المنتج</th>
+                    <th className="px-4 py-2.5">السعر</th>
+                    <th className="px-4 py-2.5">المخزن</th>
+                    <th className="px-4 py-2.5">النشر</th>
+                    <th className="px-4 py-2.5 text-center">الترتيب</th>
+                    <th className="px-4 py-2.5 text-center">الإجراءات</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#FAF7F2]">
-                  {filtered.map(p => {
-                    const img = p.images[0]?.url
-                    return (
-                      <tr key={p.id} className="hover:bg-[#FAF7F2]/40 transition-colors">
-                        <td className="p-4">
-                          <div className="flex items-center gap-3">
-                            {img ? (
-                              <img src={img} alt="" className="w-12 h-12 rounded-xl object-cover border border-[#EADBCE] bg-[#FAF7F2] shrink-0" />
-                            ) : (
-                              <div className="w-12 h-12 rounded-xl bg-[#FAF7F2] border border-[#EADBCE] flex items-center justify-center text-[#968B7E] shrink-0">
-                                <ImageIcon className="w-5 h-5" />
-                              </div>
-                            )}
-                            <div>
-                              <p className="font-bold text-[#221811] m-0 text-sm">{p.name}</p>
-                              {p.badge && (
-                                <span className="inline-block bg-[#FAF7F2] border border-[#C59B4B]/30 text-[#8D6527] text-[10px] font-bold px-2 py-0.5 rounded-full mt-1">
-                                  {p.badge}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="p-4 text-[#685D52] font-medium">{p.categoryName}</td>
-                        <td className="p-4">
-                          {p.salePrice ? (
-                            <div>
-                              <div className="flex items-center gap-1.5">
-                                <span className="font-bold text-red-600 text-sm">{p.salePrice} شيكل</span>
-                                <span className="text-xs text-[#968B7E] line-through">{p.price}</span>
-                              </div>
-                              {p.saleStartDate && p.saleEndDate && (
-                                <span className="text-[10px] text-[#968B7E] block mt-0.5">
-                                  {p.saleStartDate} إلى {p.saleEndDate}
-                                </span>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="font-bold text-[#8D6527]">{p.price} شيكل</span>
-                          )}
-                        </td>
-                        <td className="p-4">
-                          <span className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-bold ${p.isAvailable ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-                            {p.isAvailable ? 'متوفر' : 'نفد'}
-                          </span>
-                        </td>
-                        <td className="p-4">
-                          <span className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-bold ${p.isPublished ? 'bg-blue-50 text-blue-800 border border-blue-200' : 'bg-gray-100 text-gray-700 border border-gray-200'}`}>
-                            {p.isPublished ? 'منشور' : 'مسودة'}
-                          </span>
-                        </td>
-                        <td className="p-4">
-                          <div className="flex items-center justify-center gap-2">
-                            <button
-                              onClick={() => openEditForm(p)}
-                              className="w-8 h-8 rounded-lg border border-[#EADBCE] hover:border-[#8D6527] text-[#685D52] hover:text-[#8D6527] flex items-center justify-center transition-colors"
-                              title="تعديل المنتج"
-                            >
-                              <Edit3 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => setDeleteId(p.id)}
-                              className="w-8 h-8 rounded-lg border border-[#EADBCE] hover:border-red-300 text-[#685D52] hover:text-red-600 hover:bg-red-50 flex items-center justify-center transition-colors"
-                              title="حذف المنتج"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })}
+                  {items.map((p, i) => renderRow(p, items, i === 0, i === items.length - 1))}
                 </tbody>
               </table>
             </div>
-          </div>
 
-          {/* ── Mobile Product Cards ── */}
-          <div className="sm:hidden space-y-3">
-            {filtered.map(p => {
-              const img = p.images[0]?.url
-              return (
-                <div
-                  key={p.id}
-                  className="bg-white rounded-2xl border border-[#EADBCE] p-4 shadow-xs flex items-start gap-3"
-                >
-                  {/* Thumbnail */}
-                  {img ? (
-                    <img src={img} alt="" className="w-16 h-16 rounded-xl object-cover border border-[#EADBCE] shrink-0" />
-                  ) : (
-                    <div className="w-16 h-16 rounded-xl bg-[#FAF7F2] border border-[#EADBCE] flex items-center justify-center text-[#968B7E] shrink-0">
-                      <ImageIcon className="w-6 h-6" />
-                    </div>
-                  )}
-
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="font-bold text-[#221811] m-0 text-sm leading-tight truncate">{p.name}</p>
-                      {/* Action buttons */}
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <button
-                          onClick={() => openEditForm(p)}
-                          className="w-8 h-8 rounded-lg border border-[#EADBCE] hover:border-[#8D6527] text-[#685D52] hover:text-[#8D6527] flex items-center justify-center transition-colors"
-                        >
-                          <Edit3 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => setDeleteId(p.id)}
-                          className="w-8 h-8 rounded-lg border border-[#EADBCE] hover:border-red-300 text-[#685D52] hover:text-red-600 hover:bg-red-50 flex items-center justify-center transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-
-                    <span className="text-xs text-[#685D52]">{p.categoryName}</span>
-
-                    <div className="flex items-center gap-2 mt-2 flex-wrap">
-                      <span className="font-bold text-[#8D6527] text-sm">{p.price} شيكل</span>
-                      <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold ${p.isAvailable ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-                        <CheckCircle2 className="w-3 h-3" />
-                        {p.isAvailable ? 'متوفر' : 'نفد'}
-                      </span>
-                      <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold ${p.isPublished ? 'bg-blue-50 text-blue-800 border border-blue-200' : 'bg-gray-100 text-gray-700 border border-gray-200'}`}>
-                        {p.isPublished ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-                        {p.isPublished ? 'منشور' : 'مسودة'}
-                      </span>
-                    </div>
-                  </div>
+            {/* Mobile Cards */}
+            <div className="sm:hidden divide-y divide-[#FAF7F2]">
+              {items.map((p, i) => (
+                <div key={p.id} className="p-3">
+                  {renderMobileCard(p, i === 0, i === items.length - 1)}
                 </div>
-              )
-            })}
+              ))}
+            </div>
           </div>
-        </>
-      )}
+        )
+
+        return (
+          <div className="space-y-4">
+            {groups.map(({ cat, items }) =>
+              renderGroup(cat.name, items, cat.imageUrl)
+            )}
+            {uncategorised.length > 0 &&
+              renderGroup('غير مصنّف', uncategorised)
+            }
+          </div>
+        )
+      })()}
 
       {/* ── Add / Edit Modal ── */}
       {showForm && (

@@ -65,10 +65,12 @@ import AdminInvoices from './components/admin/AdminInvoices'
 import AdminCustomers from './components/admin/AdminCustomers'
 import AdminLogin from './components/admin/AdminLogin'
 import AdminSettings from './components/admin/AdminSettings'
+import AdminAnalytics from './components/admin/AdminAnalytics'
 import CheckoutModal from './components/store/CheckoutModal'
 import OrderConfirmationModal from './components/store/OrderConfirmationModal'
 import type { CheckoutCurrencyDetails, CheckoutCustomerDetails } from './components/store/CheckoutModal'
 import { CurrencyProvider } from './context/CurrencyContext'
+import { trackPageView } from './analytics'
 
 // React Router does not restore native browser anchor scrolling after a client-side
 // navigation. This also makes every category/search route start at its own header.
@@ -97,6 +99,15 @@ function ScrollManager() {
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
   }, [pathname, search, hash])
 
+  return null
+}
+
+// Track page views in Firestore for the built-in analytics dashboard
+function PageTracker() {
+  const { pathname } = useLocation()
+  useEffect(() => {
+    trackPageView(pathname)
+  }, [pathname])
   return null
 }
 
@@ -636,6 +647,23 @@ export default function App() {
     }
   }
 
+  async function handleReorderProducts(updatedItems: Product[]): Promise<void> {
+    setProducts(prev => {
+      const map = new Map(updatedItems.map(p => [p.id, p]))
+      return prev.map(p => map.get(p.id) ?? p)
+    })
+    try {
+      await Promise.all(
+        updatedItems.map(p => updateProductInFirestore(p.id, { order: p.order }))
+      )
+      notify('تم تحديث ترتيب المنتجات بنجاح ✨')
+    } catch (err) {
+      console.error('Reorder products error:', err)
+      notify(getFirestoreWriteErrorMessage(err, 'تحديث ترتيب المنتجات'), 'error')
+      throw err
+    }
+  }
+
   async function handleDeleteProduct(id: string): Promise<void> {
     try {
       await deleteProductFromFirestore(id)
@@ -813,6 +841,7 @@ export default function App() {
     <BrowserRouter>
       <ScrollManager />
       <ManifestSwitcher />
+      <PageTracker />
       <Routes>
         {/* ── Store ── */}
         <Route
@@ -891,7 +920,7 @@ export default function App() {
                   subscribers={subscribers}
                   onDeleteSubscriber={handleDeleteSubscriber}
                   onNavigate={(tab) => {
-                    const path = tab === 'orders' ? 'orders' : tab === 'products' ? 'products' : tab === 'categories' ? 'categories' : ''
+                    const path = tab === 'overview' ? '' : tab
                     window.location.assign(`/admin/${path}`)
                   }}
                 />
@@ -911,6 +940,7 @@ export default function App() {
                   onAdd={handleAddProduct}
                   onDelete={handleDeleteProduct}
                   onUpdate={handleUpdateProduct}
+                  onReorder={handleReorderProducts}
                   notify={(msg, type) => notify(msg, type ?? 'success')}
                 />
               </AdminLayout>
@@ -989,6 +1019,16 @@ export default function App() {
         />
         <Route path="/admin/settings" element={<AdminGuard user={adminUser} ready={authReady}><AdminLayout user={adminUser!} onLogout={handleAdminLogout} unseenOrdersCount={unseenOrdersCount}><AdminSettings settings={settings} coupons={coupons} promotions={promotions} products={products} user={adminUser} onSave={async next => { await updateSiteSettings(next); setSettings(next) }} onAddCoupon={handleAddCoupon} onUpdateCoupon={handleUpdateCoupon} onDeleteCoupon={handleDeleteCoupon} onAddPromotion={handleAddPromotion} onUpdatePromotion={handleUpdatePromotion} onDeletePromotion={handleDeletePromotion} notify={(msg, type) => notify(msg, type ?? 'success')} /></AdminLayout></AdminGuard>} />
         <Route path="/admin/settings/:tab" element={<AdminGuard user={adminUser} ready={authReady}><AdminLayout user={adminUser!} onLogout={handleAdminLogout} unseenOrdersCount={unseenOrdersCount}><AdminSettings settings={settings} coupons={coupons} promotions={promotions} products={products} user={adminUser} onSave={async next => { await updateSiteSettings(next); setSettings(next) }} onAddCoupon={handleAddCoupon} onUpdateCoupon={handleUpdateCoupon} onDeleteCoupon={handleDeleteCoupon} onAddPromotion={handleAddPromotion} onUpdatePromotion={handleUpdatePromotion} onDeletePromotion={handleDeletePromotion} notify={(msg, type) => notify(msg, type ?? 'success')} /></AdminLayout></AdminGuard>} />
+        <Route
+          path="/admin/analytics"
+          element={
+            <AdminGuard user={adminUser} ready={authReady}>
+              <AdminLayout user={adminUser!} onLogout={handleAdminLogout} unseenOrdersCount={unseenOrdersCount}>
+                <AdminAnalytics />
+              </AdminLayout>
+            </AdminGuard>
+          }
+        />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
