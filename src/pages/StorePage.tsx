@@ -5,6 +5,7 @@ import PromotionBanners from '../components/store/PromotionBanners'
 import CategoryGrid from '../components/store/CategoryGrid'
 import ProductGrid from '../components/store/ProductGrid'
 import StorySection from '../components/store/StorySection'
+import BookSection from '../components/store/BookSection'
 import Newsletter from '../components/store/Newsletter'
 import type { Product, Category, SiteSettings, Promotion } from '../types'
 
@@ -36,6 +37,7 @@ export default function StorePage({ products, categories, promotions = [], onAdd
         featured={true}
       />
       <StorySection />
+      <BookSection />
       <Newsletter />
     </div>
   )

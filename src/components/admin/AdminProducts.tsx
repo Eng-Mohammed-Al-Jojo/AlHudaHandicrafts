@@ -427,6 +427,11 @@ export default function AdminProducts({
                       <span className="font-bold text-red-600 text-sm">{p.salePrice} ₪</span>
                       <span className="text-xs text-[#968B7E] line-through">{p.price}</span>
                     </div>
+                    {p.saleEndDate && (
+                      <span className="text-[10px] text-amber-800 font-medium block mt-0.5">
+                        ينتهي: {p.saleEndDate}
+                      </span>
+                    )}
                   </div>
                 ) : (
                   <span className="font-bold text-[#8D6527]">{p.price} ₪</span>

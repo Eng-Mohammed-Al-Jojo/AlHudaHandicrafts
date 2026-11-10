@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Eye, Plus, Check } from 'lucide-react'
 import type { Product } from '../../types'
 import { useCurrency } from '../../context/CurrencyContext'
-
+import SaleCountdown from './SaleCountdown'
 import { isProductOnSale, getEffectiveProductPrice } from '../../utils/commerce'
 
 interface Props {
@@ -114,6 +114,13 @@ export default function ProductCard({ product, onAddToCart, onQuickView }: Props
           <h3 className="font-bold text-sm sm:text-base text-[#221811] m-0 mb-2 leading-snug group-hover:text-[#8D6527] transition-colors line-clamp-2">
             {product.name}
           </h3>
+
+          {/* Offer expiry countdown badge */}
+          {onSale && product.saleEndDate && (
+            <div className="mb-2">
+              <SaleCountdown saleEndDate={product.saleEndDate} variant="compact" />
+            </div>
+          )}
         </div>
 
         <div className="pt-3 border-t border-[#FAF7F2] flex items-center justify-between mt-auto">

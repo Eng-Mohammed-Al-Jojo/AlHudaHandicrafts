@@ -61,6 +61,7 @@ export default function Footer({ settings }: { settings: SiteSettings }) {
                 { label: 'أقسام المتجر', to: '/categories' },
                 { label: 'جميع المنتجات المطرزة', to: '/products' },
                 { label: 'قصة الحرفية والبراند', to: '/#story' },
+                { label: 'كتاب غرز البلاد (تصفح وتحميل)', to: '/book' },
               ].map(({ label, to }) => (
                 <li key={to}>
                   <Link

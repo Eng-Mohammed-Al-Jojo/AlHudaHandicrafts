@@ -55,6 +55,7 @@ import PWAInstallPrompt from './components/ui/PWAInstallPrompt'
 import StorePage from './pages/StorePage'
 import ProductsPage from './pages/ProductsPage'
 import CategoriesPage from './pages/CategoriesPage'
+import BookPage from './pages/BookPage'
 
 import AdminLayout from './components/admin/AdminLayout'
 import AdminOverview from './components/admin/AdminOverview'
@@ -896,6 +897,18 @@ export default function App() {
               settings={settings}
             >
               <CategoriesPage categories={publicCategories} />
+            </StoreLayout>
+          }
+        />
+        <Route
+          path="/book"
+          element={
+            <StoreLayout
+              cartData={cart}
+              onCheckout={() => setCheckoutOpen(true)}
+              settings={settings}
+            >
+              <BookPage settings={settings} />
             </StoreLayout>
           }
         />

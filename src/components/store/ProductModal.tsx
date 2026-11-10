@@ -15,6 +15,7 @@ import {
 import type { Product } from '../../types'
 import Modal from '../ui/Modal'
 import { useCurrency } from '../../context/CurrencyContext'
+import SaleCountdown from './SaleCountdown'
 import { isProductOnSale, getEffectiveProductPrice } from '../../utils/commerce'
 
 interface Props {
@@ -209,6 +210,13 @@ export default function ProductModal({ product, onAddToCart, onClose }: Props) {
                 </span>
               )}
             </div>
+
+            {/* Offer Countdown Banner if product is on sale with saleEndDate */}
+            {onSale && product.saleEndDate && (
+              <div className="mb-5">
+                <SaleCountdown saleEndDate={product.saleEndDate} variant="detailed" />
+              </div>
+            )}
 
             {/* Description */}
             <p className="text-xs sm:text-sm text-[#685D52] leading-relaxed mb-4 whitespace-pre-line">
