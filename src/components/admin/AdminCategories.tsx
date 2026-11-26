@@ -1,9 +1,11 @@
 import { useState, useRef, type ChangeEvent, type FormEvent } from 'react'
+import Pagination, { usePagination } from '../ui/Pagination'
 import { Plus, Edit3, Trash2, Layers, Sparkles, X, AlertCircle, Upload, Link as LinkIcon, Image as ImageIcon, Loader2, ArrowUp, ArrowDown } from 'lucide-react'
 import type { Category, FirebaseUser, Product } from '../../types'
 import { uploadCategoryImage } from '../../firebase'
 import Modal from '../ui/Modal'
 import SelectMenu from '../ui/SelectMenu'
+import ImageSizeBadge from '../ui/ImageSizeBadge'
 
 interface Props {
   categories: Category[]
@@ -30,6 +32,8 @@ export default function AdminCategories({ categories, products, user, onAdd, onU
   const [editing, setEditing] = useState<Category | null>(null)
   const [draft, setDraft] = useState(EMPTY_CAT)
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
   const [isDeleting, setIsDeleting] = useState(false)
   const [moveTargetId, setMoveTargetId] = useState('')
 
@@ -213,6 +217,7 @@ export default function AdminCategories({ categories, products, user, onAdd, onU
 
   // Sorted list used for ordering logic
   const sortedCategories = [...categories].sort((a, b) => a.order - b.order)
+  const { pageItems: pagedCategories, totalItems: totalCats, totalPages: catPages } = usePagination(sortedCategories, pageSize, currentPage)
 
   async function moveCategory(id: string, direction: 'up' | 'down') {
     const idx = sortedCategories.findIndex(c => c.id === id)
@@ -262,7 +267,7 @@ export default function AdminCategories({ categories, products, user, onAdd, onU
 
       {/* Categories Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {sortedCategories.map(cat => (
+        {pagedCategories.map(cat => (
           <div
             key={cat.id}
             className="bg-white rounded-2xl border border-[#EADBCE] overflow-hidden shadow-xs hover:border-[#DFB76C] transition-all flex flex-col justify-between"
@@ -292,6 +297,9 @@ export default function AdminCategories({ categories, products, user, onAdd, onU
                   {cat.isVisible ? 'ظاهر' : 'مخفي'}
                 </span>
               </div>
+              {cat.imageUrl && (
+                <ImageSizeBadge url={cat.imageUrl} prefix="الحجم: " className="absolute bottom-3 left-3" />
+              )}
             </div>
 
             {/* Content Details */}
@@ -348,6 +356,8 @@ export default function AdminCategories({ categories, products, user, onAdd, onU
           </div>
         ))}
       </div>
+
+      <Pagination currentPage={currentPage} totalPages={catPages} totalItems={totalCats} pageSize={pageSize} onPageChange={setCurrentPage} onPageSizeChange={size => { setPageSize(size); setCurrentPage(1) }} className="bg-white rounded-3xl border border-[#EADBCE] p-4" />
 
       {/* Category Modal (Add / Edit) */}
       {showModal && (
@@ -458,11 +468,17 @@ export default function AdminCategories({ categories, products, user, onAdd, onU
                           <span className="text-xs font-bold text-[#221811] block truncate">
                             {pendingImageFile ? pendingImageFile.name : 'الصورة الحالية للقسم'}
                           </span>
-                          {pendingImageFile && (
-                            <span className="text-[11px] text-[#8D6527] block mt-0.5">
-                              {(pendingImageFile.size / (1024 * 1024)).toFixed(2)} MB • جاهزة للرفع
-                            </span>
-                          )}
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            <ImageSizeBadge
+                              url={pendingImageFile ? undefined : previewUrl}
+                              bytes={pendingImageFile?.size}
+                              variant="pill"
+                              prefix="الحجم: "
+                            />
+                            {pendingImageFile && (
+                              <span className="text-[11px] text-[#8D6527]">جاهزة للرفع</span>
+                            )}
+                          </div>
                           <div className="flex items-center gap-2 mt-2">
                             <button
                               type="button"

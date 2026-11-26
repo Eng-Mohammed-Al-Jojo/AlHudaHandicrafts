@@ -22,6 +22,7 @@ import type { Product, Category, FirebaseUser } from '../../types'
 import { uploadProductImage } from '../../firebase'
 import Modal from '../ui/Modal'
 import SelectMenu from '../ui/SelectMenu'
+import ImageSizeBadge from '../ui/ImageSizeBadge'
 
 interface Props {
   products: Product[]
@@ -412,11 +413,14 @@ export default function AdminProducts({
                   )}
                   <div>
                     <p className="font-bold text-[#221811] m-0 text-sm">{p.name}</p>
-                    {p.badge && (
-                      <span className="inline-block bg-[#FAF7F2] border border-[#C59B4B]/30 text-[#8D6527] text-[10px] font-bold px-2 py-0.5 rounded-full mt-0.5">
-                        {p.badge}
-                      </span>
-                    )}
+                    <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                      {p.badge && (
+                        <span className="inline-block bg-[#FAF7F2] border border-[#C59B4B]/30 text-[#8D6527] text-[10px] font-bold px-2 py-0.5 rounded-full">
+                          {p.badge}
+                        </span>
+                      )}
+                      {img && <ImageSizeBadge url={img} variant="pill" prefix="الصورة: " />}
+                    </div>
                   </div>
                 </div>
               </td>
@@ -535,6 +539,7 @@ export default function AdminProducts({
                     {p.isPublished ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
                     {p.isPublished ? 'منشور' : 'مسودة'}
                   </span>
+                  {img && <ImageSizeBadge url={img} variant="pill" prefix="الصورة: " />}
                 </div>
               </div>
             </div>
@@ -847,6 +852,7 @@ export default function AdminProducts({
                                 رئيسية
                               </span>
                             )}
+                            <ImageSizeBadge url={url} className="absolute bottom-1 left-1 text-[9px] px-1.5 py-0.5" />
                           </div>
                         ))}
                         {pendingImages.map((img, idx) => (
@@ -856,6 +862,7 @@ export default function AdminProducts({
                             <span className="absolute bottom-1 right-1 bg-amber-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-md">
                               قيد الرفع
                             </span>
+                            <ImageSizeBadge bytes={img.file.size} className="absolute bottom-1 left-1 text-[9px] px-1.5 py-0.5" />
                             <button
                               type="button"
                               onClick={() => setImageDeleteTarget({ kind: 'pending', index: idx })}

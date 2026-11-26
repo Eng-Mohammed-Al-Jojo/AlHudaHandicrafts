@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import Pagination, { usePagination } from '../ui/Pagination'
 import {
   ArrowLeft,
   CalendarDays,
@@ -63,6 +64,9 @@ export default function AdminInvoices({ invoices, products, settings, onAdd, onU
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [imageSavingId, setImageSavingId] = useState<string | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc')
 
   const totals = useMemo(() => {
     const sales = invoices.filter(invoice => invoice.type === 'sale')
@@ -91,6 +95,16 @@ export default function AdminInvoices({ invoices, products, settings, onAdd, onU
       return inText || inPhone
     })
   }, [invoices, search, typeFilter])
+
+  const sortedInvoices = useMemo(() =>
+    [...filtered].sort((a, b) => {
+      const diff = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      return sortOrder === 'desc' ? diff : -diff
+    }), [filtered, sortOrder])
+
+  useEffect(() => { setCurrentPage(1) }, [search, typeFilter])
+
+  const { pageItems: pagedInvoices, totalItems: totalInvoices, totalPages: invoicePages } = usePagination(sortedInvoices, pageSize, currentPage)
 
   function openNew() {
     setEditingInvoice(null)
@@ -271,8 +285,9 @@ export default function AdminInvoices({ invoices, products, settings, onAdd, onU
             <h2 className="font-serif text-lg sm:text-xl font-bold text-[#221811] m-0" style={{ fontFamily: 'Amiri, serif' }}>
               سجل الفواتير
             </h2>
-            <p className="text-[11px] text-[#685D52] m-0 mt-0.5">{filtered.length} فاتورة معروضة من أصل {invoices.length}</p>
+            <p className="text-[11px] text-[#685D52] m-0 mt-0.5">{totalInvoices} فاتورة معروضة من أصل {invoices.length}</p>
           </div>
+          <button onClick={() => setSortOrder(s => s === 'desc' ? 'asc' : 'desc')} className={`inline-flex items-center gap-1.5 border text-xs font-bold px-3 py-2 rounded-xl transition-colors ${sortOrder === 'desc' ? 'bg-[#FAF7F2] border-[#EADBCE] text-[#685D52]' : 'bg-[#8D6527]/10 border-[#8D6527]/30 text-[#8D6527]'}`}>{sortOrder === 'desc' ? 'الأحدث أولاً ↓' : 'الأقدم أولاً ↑'}</button>
         </div>
 
         {invoices.length === 0 ? (
@@ -304,12 +319,12 @@ export default function AdminInvoices({ invoices, products, settings, onAdd, onU
                     <th className="p-4">واتساب</th>
                     <th className="p-4">الأصناف</th>
                     <th className="p-4">الإجمالي</th>
-                    <th className="p-4">التاريخ</th>
+                    <th className="p-4 cursor-pointer select-none" onClick={() => setSortOrder(s => s === 'desc' ? 'asc' : 'desc')}><span className="flex items-center gap-1">التاريخ <span className="text-[#8D6527]">{sortOrder === 'desc' ? '↓' : '↑'}</span></span></th>
                     <th className="p-4 text-center">إجراءات</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#FAF7F2]">
-                  {filtered.map(invoice => {
+                  {pagedInvoices.map(invoice => {
                     const invoiceTotals = calculateInvoiceTotals(invoice)
                     return (
                       <tr key={invoice.id} className="hover:bg-[#FAF7F2]/50 transition-colors">
@@ -363,7 +378,7 @@ export default function AdminInvoices({ invoices, products, settings, onAdd, onU
 
             {/* Mobile cards */}
             <div className="lg:hidden divide-y divide-[#FAF7F2]">
-              {filtered.map(invoice => {
+              {pagedInvoices.map(invoice => {
                 const invoiceTotals = calculateInvoiceTotals(invoice)
                 return (
                   <div key={invoice.id} className="p-4 space-y-2.5">
@@ -400,6 +415,8 @@ export default function AdminInvoices({ invoices, products, settings, onAdd, onU
         )}
       </div>
 
+      <Pagination currentPage={currentPage} totalPages={invoicePages} totalItems={totalInvoices} pageSize={pageSize} onPageChange={setCurrentPage} onPageSizeChange={size => { setPageSize(size); setCurrentPage(1) }} className="bg-white rounded-2xl border border-[#EADBCE] p-4" />
+
       {/* Editor */}
       {editorOpen && (
         <Modal onClose={() => { setEditorOpen(false); setEditingInvoice(null) }} size="2xl" structured className="p-0">
@@ -419,42 +436,31 @@ export default function AdminInvoices({ invoices, products, settings, onAdd, onU
 
       {/* Preview */}
       {viewingInvoice && (
-        <Modal onClose={() => setViewingInvoice(null)} size="xl" structured className="p-0">
-          <div className="bg-[#FAF7F2] p-4 border-b border-[#EADBCE] flex flex-wrap items-center justify-between gap-2 shrink-0">
-            <div className="flex items-center gap-2">
-              <ReceiptText className="w-4 h-4 text-[#8D6527]" />
-              <span className="font-bold text-sm text-[#221811]">{viewingInvoice.invoiceNumber}</span>
-              <span className="text-[10px] text-[#968B7E]">{invoiceDateLabel(viewingInvoice.createdAt)}</span>
+        <Modal onClose={() => setViewingInvoice(null)} size="xl" structured className="p-0 flex flex-col max-h-[95vh]">
+          {/* Sticky header */}
+          <div className="bg-[#FAF7F2] p-3 border-b border-[#EADBCE] flex flex-wrap items-center justify-between gap-2 shrink-0 sticky top-0 z-10">
+            <div className="flex items-center gap-2 min-w-0">
+              <ReceiptText className="w-4 h-4 text-[#8D6527] shrink-0" />
+              <span className="font-bold text-sm text-[#221811] truncate">{viewingInvoice.invoiceNumber}</span>
+              <span className="text-[10px] text-[#968B7E] hidden sm:block">{invoiceDateLabel(viewingInvoice.createdAt)}</span>
             </div>
-            <div className="flex items-center gap-2">
-              <button onClick={() => shareInvoice(viewingInvoice)} className="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-3 py-2 flex items-center gap-1.5 transition-colors cursor-pointer">
-                <MessageCircle className="w-3.5 h-3.5" />
-                واتساب
-              </button>
-              <button onClick={() => printManualInvoice(viewingInvoice, settings)} className="rounded-lg bg-[#8D6527] hover:bg-[#704F1E] text-white text-[11px] font-bold px-3 py-2 flex items-center gap-1.5 transition-colors cursor-pointer">
-                <Printer className="w-3.5 h-3.5" />
-                طباعة / PDF
-              </button>
-              <button
-                onClick={() => { void saveAsImage(viewingInvoice) }}
-                disabled={imageSavingId === viewingInvoice.id}
-                className="rounded-lg bg-[#24180E] hover:bg-[#3A2A18] text-[#DFB76C] text-[11px] font-bold px-3 py-2 flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-60"
-              >
-                {imageSavingId === viewingInvoice.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImageDown className="w-3.5 h-3.5" />}
-                حفظ كصورة
-              </button>
-              <button onClick={() => openEdit(viewingInvoice)} className="rounded-lg border border-[#EADBCE] bg-white text-[#685D52] hover:text-[#221811] text-[11px] font-bold px-3 py-2 flex items-center gap-1.5 transition-colors cursor-pointer">
-                <Pencil className="w-3.5 h-3.5" />
-                تعديل
-              </button>
-              <button onClick={() => setViewingInvoice(null)} className="w-8 h-8 rounded-lg border border-[#EADBCE] bg-white text-[#685D52] flex items-center justify-center cursor-pointer" title="إغلاق"><X className="w-4 h-4" /></button>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button onClick={() => shareInvoice(viewingInvoice)} className="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-3 py-2 flex items-center gap-1.5 transition-colors cursor-pointer"><MessageCircle className="w-3.5 h-3.5" />واتساب</button>
+              <button onClick={() => printManualInvoice(viewingInvoice, settings)} className="rounded-lg bg-[#8D6527] hover:bg-[#704F1E] text-white text-[11px] font-bold px-3 py-2 flex items-center gap-1.5 transition-colors cursor-pointer"><Printer className="w-3.5 h-3.5" />طباعة</button>
+              <button onClick={() => { void saveAsImage(viewingInvoice) }} disabled={imageSavingId === viewingInvoice.id} className="rounded-lg bg-[#24180E] hover:bg-[#3A2A18] text-[#DFB76C] text-[11px] font-bold px-3 py-2 flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-60">{imageSavingId === viewingInvoice.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImageDown className="w-3.5 h-3.5" />}حفظ كصورة</button>
+              <button onClick={() => openEdit(viewingInvoice)} className="rounded-lg border border-[#EADBCE] bg-white text-[#685D52] hover:text-[#221811] text-[11px] font-bold px-3 py-2 flex items-center gap-1.5 transition-colors cursor-pointer"><Pencil className="w-3.5 h-3.5" />تعديل</button>
+              <button onClick={() => setViewingInvoice(null)} className="w-10 h-10 rounded-xl border-2 border-red-200 bg-red-50 hover:bg-red-100 text-red-600 flex items-center justify-center cursor-pointer transition-colors" title="إغلاق"><X className="w-5 h-5" /></button>
             </div>
           </div>
-          <iframe
-            title={`معاينة ${viewingInvoice.invoiceNumber}`}
-            srcDoc={buildManualInvoiceHtml(viewingInvoice, settings)}
-            className="w-full flex-1 min-h-[60vh] bg-white"
-          />
+          {/* Scrollable iframe wrapper */}
+          <div className="flex-1 overflow-auto min-h-0">
+            <iframe
+              title={`معاينة ${viewingInvoice.invoiceNumber}`}
+              srcDoc={buildManualInvoiceHtml(viewingInvoice, settings)}
+              className="w-full bg-white border-0"
+              style={{ minHeight: 'max(500px, 70vh)', display: 'block' }}
+            />
+          </div>
         </Modal>
       )}
 

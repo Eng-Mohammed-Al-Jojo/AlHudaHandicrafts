@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import Pagination, { usePagination } from '../ui/Pagination'
 import {
   Plus,
   Trash2,
@@ -47,11 +48,20 @@ export default function AdminCoupons({ coupons, onAdd, onUpdate, onDelete, notif
   // Custom Confirm Dialog State
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; code: string } | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('asc')
 
   // Deduplicate coupons by id in case any duplicate state lingers
   const uniqueCoupons = Array.from(
     new Map(coupons.map(c => [c.id, c])).values()
   )
+
+  const sortedCoupons = [...uniqueCoupons].sort((a, b) => {
+    const diff = new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
+    return sortOrder === 'desc' ? diff : -diff
+  })
+  const { pageItems: pagedCoupons, totalItems: totalCoupons, totalPages: couponPages } = usePagination(sortedCoupons, pageSize, currentPage)
 
   function openCreateModal() {
     setEditingCoupon(null)
@@ -237,7 +247,7 @@ export default function AdminCoupons({ coupons, onAdd, onUpdate, onDelete, notif
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#FAF7F2]">
-                {uniqueCoupons.map(c => {
+                {pagedCoupons.map(c => {
                   const isExpired = new Date(c.endDate) < now
                   const isUpcoming = new Date(c.startDate) > now
                   const isActive = c.isActive !== false && !isExpired && !isUpcoming
@@ -351,6 +361,8 @@ export default function AdminCoupons({ coupons, onAdd, onUpdate, onDelete, notif
           </div>
         </div>
       )}
+
+      <Pagination currentPage={currentPage} totalPages={couponPages} totalItems={totalCoupons} pageSize={pageSize} onPageChange={setCurrentPage} onPageSizeChange={size => { setPageSize(size); setCurrentPage(1) }} className="bg-white rounded-3xl border border-[#EADBCE] p-4" />
 
       {/* Modal - Add / Edit Coupon */}
       {showForm && (

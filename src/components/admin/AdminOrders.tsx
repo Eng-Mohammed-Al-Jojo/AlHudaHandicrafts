@@ -1,4 +1,5 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import Pagination, { usePagination } from '../ui/Pagination'
 import { CalendarDays, CheckCircle2, CreditCard, Download, FilePenLine, Filter, ImageDown, LayoutGrid, List, Loader2, MessageCircle, Phone, Printer, ReceiptText, Search, Send, ShoppingBag, Sparkles, Ticket, Trash2, X } from 'lucide-react'
 import type { Invoice, InvoiceDraft, InvoiceSignature, Order, OrderStatus, PaymentMethod, PaymentMethodId, Product, SiteSettings } from '../../types'
 import Modal from '../ui/Modal'
@@ -139,6 +140,9 @@ export default function AdminOrders({ orders, invoices, products, settings, onUp
   const [isDeleting, setIsDeleting] = useState(false)
   const [isConfirmingPayment, setIsConfirmingPayment] = useState(false)
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc')
 
   const filteredOrders = useMemo(() => {
     const query = search.trim().toLowerCase()
@@ -150,6 +154,16 @@ export default function AdminOrders({ orders, invoices, products, settings, onUp
       return dateMatches && statusMatches && searchMatches
     })
   }, [orders, statusFilter, dateFilter, fromDate, toDate, search])
+
+  const sortedOrders = useMemo(() =>
+    [...filteredOrders].sort((a, b) => {
+      const diff = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      return sortOrder === 'desc' ? diff : -diff
+    }), [filteredOrders, sortOrder])
+
+  useEffect(() => { setCurrentPage(1) }, [statusFilter, dateFilter, fromDate, toDate, search])
+
+  const { pageItems: pagedOrders, totalItems, totalPages } = usePagination(sortedOrders, pageSize, currentPage)
 
   async function handleExport() {
     if (!filteredOrders.length) return notify('لا توجد طلبات مطابقة للفلاتر لتصديرها.')
@@ -230,7 +244,7 @@ export default function AdminOrders({ orders, invoices, products, settings, onUp
     <div className="bg-white rounded-2xl sm:rounded-3xl border border-[#EADBCE] p-5 sm:p-8 shadow-xs">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
         <div><div className="eyebrow mb-1"><Sparkles className="w-3.5 h-3.5 text-[#C59B4B]" /><span>طلبات الزبائن والمتابعة</span></div><h1 className="font-serif text-2xl sm:text-3xl font-normal text-[#221811] m-0" style={{ fontFamily: 'Amiri, serif' }}>إدارة الطلبات</h1><p className="text-xs text-[#685D52] m-0 mt-1">استعرضي الطلبات، حدّثي بياناتها، وصدّري النتائج التي تظهر لكِ.</p></div>
-        <div className="flex flex-wrap items-center gap-2"><span className="inline-flex items-center gap-2 bg-[#FAF7F2] border border-[#EADBCE] text-[#8D6527] text-sm font-bold px-4 py-2 rounded-full"><ShoppingBag className="w-4 h-4" />{filteredOrders.length} من {orders.length} طلب</span><div className="flex rounded-xl border border-[#EADBCE] p-1 bg-[#FAF7F2]" aria-label="طريقة عرض الطلبات"><button onClick={() => setViewMode('table')} className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${viewMode === 'table' ? 'bg-white text-[#8D6527] shadow-xs' : 'text-[#968B7E]'}`} title="عرض جدول"><List className="w-4 h-4" /></button><button onClick={() => setViewMode('cards')} className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${viewMode === 'cards' ? 'bg-white text-[#8D6527] shadow-xs' : 'text-[#968B7E]'}`} title="عرض بطاقات"><LayoutGrid className="w-4 h-4" /></button></div><button onClick={handleExport} className="inline-flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition-colors"><Download className="w-4 h-4" />تصدير Excel</button></div>
+        <div className="flex flex-wrap items-center gap-2"><span className="inline-flex items-center gap-2 bg-[#FAF7F2] border border-[#EADBCE] text-[#8D6527] text-sm font-bold px-4 py-2 rounded-full"><ShoppingBag className="w-4 h-4" />{totalItems} من {orders.length} طلب</span><div className="flex rounded-xl border border-[#EADBCE] p-1 bg-[#FAF7F2]" aria-label="طريقة عرض الطلبات"><button onClick={() => setViewMode('table')} className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${viewMode === 'table' ? 'bg-white text-[#8D6527] shadow-xs' : 'text-[#968B7E]'}`} title="عرض جدول"><List className="w-4 h-4" /></button><button onClick={() => setViewMode('cards')} className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${viewMode === 'cards' ? 'bg-white text-[#8D6527] shadow-xs' : 'text-[#968B7E]'}`} title="عرض بطاقات"><LayoutGrid className="w-4 h-4" /></button></div><button onClick={() => setSortOrder(s => s === 'desc' ? 'asc' : 'desc')} className={`inline-flex items-center gap-1.5 border text-xs font-bold px-3 py-2.5 rounded-xl transition-colors ${sortOrder === 'desc' ? 'bg-[#FAF7F2] border-[#EADBCE] text-[#685D52]' : 'bg-[#8D6527]/10 border-[#8D6527]/30 text-[#8D6527]'}`} title="ترتيب حسب التاريخ"><CalendarDays className="w-3.5 h-3.5" />{sortOrder === 'desc' ? 'الأحدث أولاً' : 'الأقدم أولاً'}</button><button onClick={handleExport} className="inline-flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition-colors"><Download className="w-4 h-4" />تصدير Excel</button></div>
       </div>
     </div>
 
@@ -244,7 +258,9 @@ export default function AdminOrders({ orders, invoices, products, settings, onUp
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">{(['الكل', ...ALL_STATUSES] as const).map(status => <button key={status} onClick={() => setStatusFilter(status)} className={`px-3 py-2 rounded-xl text-xs font-bold transition-all shrink-0 ${statusFilter === status ? 'bg-[#8D6527] text-white' : 'text-[#685D52] hover:bg-[#FAF7F2]'}`}>{status} ({status === 'الكل' ? orders.length : orders.filter(order => order.status === status).length})</button>)}</div>
     </div>
 
-    {filteredOrders.length === 0 ? <div className="bg-white rounded-2xl border border-[#EADBCE] shadow-xs p-12 text-center"><ShoppingBag className="w-9 h-9 text-[#C59B4B] mx-auto mb-3" /><h3 className="font-serif text-xl text-[#221811] m-0 mb-1">لا توجد طلبات مطابقة</h3><p className="text-xs text-[#685D52] m-0">غيّري الفلاتر أو اختاري فترة أخرى.</p></div> : viewMode === 'table' ? <div className="w-full max-w-full min-w-0 bg-white rounded-2xl border border-[#EADBCE] shadow-xs overflow-hidden"><div className="w-full max-w-full overflow-x-auto overflow-y-hidden overscroll-x-contain"><table className="w-full min-w-[1120px] text-right border-collapse"><thead className="bg-[#24180E] text-[#F7F1E5] text-xs"><tr><th className="px-4 py-4 font-semibold">الطلب</th><th className="px-4 py-4 font-semibold">التاريخ</th><th className="px-4 py-4 font-semibold">العميلة والتواصل</th><th className="px-4 py-4 font-semibold">المنتجات</th><th className="px-4 py-4 font-semibold">الإجمالي</th><th className="px-4 py-4 font-semibold">الحالة</th><th className="px-4 py-4 font-semibold">إجراءات</th></tr></thead><tbody className="divide-y divide-[#EADBCE]">{filteredOrders.map(order => <OrderRow key={order.id} order={order} onUpdateStatus={(id, status) => void handleStatusChange(id, status)} updatingStatus={updatingStatusId === order.id} onEdit={() => setEditingOrder(order)} onDelete={() => setDeletingOrder(order)} onOpenInvoice={() => setInvoiceOrder(order)} onConfirmPayment={() => setPaymentOrder(order)} />)}</tbody></table></div></div> : <div className="w-full min-w-0 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">{filteredOrders.map(order => <OrderCard key={order.id} order={order} onUpdateStatus={(id, status) => void handleStatusChange(id, status)} updatingStatus={updatingStatusId === order.id} onEdit={() => setEditingOrder(order)} onDelete={() => setDeletingOrder(order)} onOpenInvoice={() => setInvoiceOrder(order)} onConfirmPayment={() => setPaymentOrder(order)} />)}</div>}
+    {filteredOrders.length === 0 ? <div className="bg-white rounded-2xl border border-[#EADBCE] shadow-xs p-12 text-center"><ShoppingBag className="w-9 h-9 text-[#C59B4B] mx-auto mb-3" /><h3 className="font-serif text-xl text-[#221811] m-0 mb-1">لا توجد طلبات مطابقة</h3><p className="text-xs text-[#685D52] m-0">غيّري الفلاتر أو اختاري فترة أخرى.</p></div> : viewMode === 'table' ? <div className="w-full max-w-full min-w-0 bg-white rounded-2xl border border-[#EADBCE] shadow-xs overflow-hidden"><div className="w-full max-w-full overflow-x-auto overflow-y-hidden overscroll-x-contain"><table className="w-full min-w-[1120px] text-right border-collapse"><thead className="bg-[#24180E] text-[#F7F1E5] text-xs"><tr><th className="px-4 py-4 font-semibold">الطلب</th><th className="px-4 py-4 font-semibold">التاريخ</th><th className="px-4 py-4 font-semibold">العميلة والتواصل</th><th className="px-4 py-4 font-semibold">المنتجات</th><th className="px-4 py-4 font-semibold">الإجمالي</th><th className="px-4 py-4 font-semibold">الحالة</th><th className="px-4 py-4 font-semibold">إجراءات</th></tr></thead><tbody className="divide-y divide-[#EADBCE]">{pagedOrders.map(order => <OrderRow key={order.id} order={order} onUpdateStatus={(id, status) => void handleStatusChange(id, status)} updatingStatus={updatingStatusId === order.id} onEdit={() => setEditingOrder(order)} onDelete={() => setDeletingOrder(order)} onOpenInvoice={() => setInvoiceOrder(order)} onConfirmPayment={() => setPaymentOrder(order)} />)}</tbody></table></div></div> : <div className="w-full min-w-0 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">{pagedOrders.map(order => <OrderCard key={order.id} order={order} onUpdateStatus={(id, status) => void handleStatusChange(id, status)} updatingStatus={updatingStatusId === order.id} onEdit={() => setEditingOrder(order)} onDelete={() => setDeletingOrder(order)} onOpenInvoice={() => setInvoiceOrder(order)} onConfirmPayment={() => setPaymentOrder(order)} />)}</div>}
+
+    <Pagination currentPage={currentPage} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} onPageChange={setCurrentPage} onPageSizeChange={size => { setPageSize(size); setCurrentPage(1) }} className="bg-white rounded-2xl border border-[#EADBCE] p-4" />
 
     {editingOrder && <OrderEditor order={editingOrder} onClose={() => setEditingOrder(null)} onSave={async order => { await onUpdate(order); setEditingOrder(null) }} />}
     {deletingOrder && <Modal onClose={() => !isDeleting && setDeletingOrder(null)} size="sm"><div className="p-6 sm:p-8"><div className="flex items-center gap-3 text-red-800"><div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center"><Trash2 className="w-5 h-5" /></div><h2 className="font-serif text-xl m-0">حذف الطلب</h2></div><p className="text-sm text-[#685D52] leading-relaxed mt-5">هل تريدين حذف طلب <strong>{deletingOrder.customer}</strong> نهائياً؟ لا يمكن استرجاعه بعد الحذف.</p><div className="flex justify-end gap-2 mt-6"><button disabled={isDeleting} onClick={() => setDeletingOrder(null)} className="px-4 py-2.5 rounded-xl text-xs font-bold text-[#685D52] hover:bg-[#FAF7F2]">إلغاء</button><button disabled={isDeleting} onClick={confirmDelete} className="px-4 py-2.5 rounded-xl text-xs font-bold bg-red-700 hover:bg-red-800 text-white disabled:opacity-60">{isDeleting ? 'جارٍ الحذف...' : 'حذف نهائياً'}</button></div></div></Modal>}
@@ -526,34 +542,30 @@ function InvoicePreviewModal({
   }
 
   return (
-    <Modal onClose={onClose} size="xl" structured className="p-0">
-      <div className="bg-[#FAF7F2] p-4 border-b border-[#EADBCE] flex flex-wrap items-center justify-between gap-2 shrink-0">
-        <div className="flex items-center gap-2">
-          <ReceiptText className="w-4 h-4 text-[#8D6527]" />
-          <span className="font-bold text-sm text-[#221811]">{invoice.invoiceNumber}</span>
-          <span className="text-[10px] text-[#968B7E]">{invoiceDateLabel(invoice.createdAt)}</span>
+    <Modal onClose={onClose} size="xl" structured className="p-0 flex flex-col max-h-[95vh]">
+      {/* Sticky header */}
+      <div className="bg-[#FAF7F2] p-3 border-b border-[#EADBCE] flex flex-wrap items-center justify-between gap-2 shrink-0 sticky top-0 z-10">
+        <div className="flex items-center gap-2 min-w-0">
+          <ReceiptText className="w-4 h-4 text-[#8D6527] shrink-0" />
+          <span className="font-bold text-sm text-[#221811] truncate">{invoice.invoiceNumber}</span>
+          <span className="text-[10px] text-[#968B7E] hidden sm:block">{invoiceDateLabel(invoice.createdAt)}</span>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={shareInvoice} className="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-3 py-2 flex items-center gap-1.5 transition-colors cursor-pointer">
-            <MessageCircle className="w-3.5 h-3.5" />
-            واتساب
-          </button>
-          <button onClick={() => printManualInvoice(invoice, settings)} className="rounded-lg bg-[#8D6527] hover:bg-[#704F1E] text-white text-[11px] font-bold px-3 py-2 flex items-center gap-1.5 transition-colors cursor-pointer">
-            <Printer className="w-3.5 h-3.5" />
-            طباعة / PDF
-          </button>
-          <button onClick={() => { void saveAsImage() }} disabled={imageSaving} className="rounded-lg bg-[#24180E] hover:bg-[#3A2A18] text-[#DFB76C] text-[11px] font-bold px-3 py-2 flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-60">
-            {imageSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImageDown className="w-3.5 h-3.5" />}
-            حفظ كصورة
-          </button>
-          <button onClick={onClose} className="w-8 h-8 rounded-lg border border-[#EADBCE] bg-white text-[#685D52] flex items-center justify-center cursor-pointer" title="إغلاق"><X className="w-4 h-4" /></button>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button onClick={shareInvoice} className="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-3 py-2 flex items-center gap-1.5 transition-colors cursor-pointer"><MessageCircle className="w-3.5 h-3.5" />واتساب</button>
+          <button onClick={() => printManualInvoice(invoice, settings)} className="rounded-lg bg-[#8D6527] hover:bg-[#704F1E] text-white text-[11px] font-bold px-3 py-2 flex items-center gap-1.5 transition-colors cursor-pointer"><Printer className="w-3.5 h-3.5" />طباعة</button>
+          <button onClick={() => { void saveAsImage() }} disabled={imageSaving} className="rounded-lg bg-[#24180E] hover:bg-[#3A2A18] text-[#DFB76C] text-[11px] font-bold px-3 py-2 flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-60">{imageSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImageDown className="w-3.5 h-3.5" />}حفظ كصورة</button>
+          <button onClick={onClose} className="w-10 h-10 rounded-xl border-2 border-red-200 bg-red-50 hover:bg-red-100 text-red-600 flex items-center justify-center cursor-pointer transition-colors" title="إغلاق"><X className="w-5 h-5" /></button>
         </div>
       </div>
-      <iframe
-        title={`معاينة ${invoice.invoiceNumber}`}
-        srcDoc={buildManualInvoiceHtml(invoice, settings)}
-        className="w-full flex-1 min-h-[60vh] bg-white"
-      />
+      {/* Scrollable iframe wrapper */}
+      <div className="flex-1 overflow-auto min-h-0">
+        <iframe
+          title={`معاينة ${invoice.invoiceNumber}`}
+          srcDoc={buildManualInvoiceHtml(invoice, settings)}
+          className="w-full bg-white border-0"
+          style={{ minHeight: 'max(500px, 70vh)', display: 'block' }}
+        />
+      </div>
     </Modal>
   )
 }

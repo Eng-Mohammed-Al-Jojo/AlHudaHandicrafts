@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import Pagination, { usePagination } from '../ui/Pagination'
 import {
   CalendarDays,
   Eye,
@@ -63,6 +64,9 @@ export default function AdminCustomers({ orders, invoices }: Props) {
   const [search, setSearch] = useState('')
   const [sourceFilter, setSourceFilter] = useState<CustomerSourceFilter>('all')
   const [selected, setSelected] = useState<CustomerRecord | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc')
 
   const customers = useMemo(() => {
     const map = new Map<string, CustomerRecord>()
@@ -141,6 +145,16 @@ export default function AdminCustomers({ orders, invoices }: Props) {
       return inName || inAddress || inPhone
     })
   }, [customers, search, sourceFilter])
+
+  const sortedCustomers = useMemo(() =>
+    [...filtered].sort((a, b) => {
+      const diff = new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime()
+      return sortOrder === 'desc' ? diff : -diff
+    }), [filtered, sortOrder])
+
+  useEffect(() => { setCurrentPage(1) }, [search, sourceFilter])
+
+  const { pageItems: pagedCustomers, totalItems: totalCustomers, totalPages: customerPages } = usePagination(sortedCustomers, pageSize, currentPage)
 
   const stats = useMemo(() => ({
     total: customers.length,
@@ -322,12 +336,12 @@ export default function AdminCustomers({ orders, invoices }: Props) {
                     <th className="p-4 text-center">الطلبات</th>
                     <th className="p-4 text-center">الفواتير</th>
                     <th className="p-4">قيمة التعاملات</th>
-                    <th className="p-4">آخر نشاط</th>
+                    <th className="p-4 cursor-pointer select-none" onClick={() => setSortOrder(s => s === 'desc' ? 'asc' : 'desc')}><span className="flex items-center gap-1">آخر نشاط <span className="text-[#8D6527]">{sortOrder === 'desc' ? '↓' : '↑'}</span></span></th>
                     <th className="p-4 text-center">تفاصيل</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#FAF7F2]">
-                  {filtered.map(customer => (
+                  {pagedCustomers.map(customer => (
                     <tr key={customer.key} className="hover:bg-[#FAF7F2]/50 transition-colors">
                       <td className="p-4">
                         <span className="flex items-center gap-2">
@@ -354,7 +368,7 @@ export default function AdminCustomers({ orders, invoices }: Props) {
 
             {/* Mobile cards */}
             <div className="lg:hidden divide-y divide-[#FAF7F2]">
-              {filtered.map(customer => (
+              {pagedCustomers.map(customer => (
                 <button
                   key={customer.key}
                   onClick={() => setSelected(customer)}
@@ -379,6 +393,8 @@ export default function AdminCustomers({ orders, invoices }: Props) {
           </>
         )}
       </div>
+
+      <Pagination currentPage={currentPage} totalPages={customerPages} totalItems={totalCustomers} pageSize={pageSize} onPageChange={setCurrentPage} onPageSizeChange={size => { setPageSize(size); setCurrentPage(1) }} className="bg-white rounded-2xl border border-[#EADBCE] p-4" />
 
       {/* Customer details */}
       {selected && (
