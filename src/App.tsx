@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import './index.css'
 
-import type { FirebaseUser, Product, Category, Order, OrderStatus, PaymentStatus, SiteSettings, NewsletterSubscriber, Invoice, InvoiceDraft, InvoiceSignature, Coupon, Promotion } from './types'
+import type { FirebaseUser, Product, Category, Book, Order, OrderStatus, PaymentStatus, SiteSettings, NewsletterSubscriber, Invoice, InvoiceDraft, InvoiceSignature, Coupon, Promotion } from './types'
 import { DEFAULT_SITE_SETTINGS } from './types'
 import { MOCK_PRODUCTS, MOCK_CATEGORIES } from './data'
 
@@ -35,6 +35,11 @@ import {
   addPromotionToFirestore,
   updatePromotionInFirestore,
   deletePromotionFromFirestore,
+  subscribeToBooks,
+  addBookToFirestore,
+  updateBookInFirestore,
+  deleteBookFromFirestore,
+  reorderBooksInFirestore,
   seedInitialDatabase,
   clearAllFirestoreData
 } from './firebase'
@@ -55,12 +60,14 @@ import PWAInstallPrompt from './components/ui/PWAInstallPrompt'
 import StorePage from './pages/StorePage'
 import ProductsPage from './pages/ProductsPage'
 import CategoriesPage from './pages/CategoriesPage'
+import BooksPage from './pages/BooksPage'
 import BookPage from './pages/BookPage'
 
 import AdminLayout from './components/admin/AdminLayout'
 import AdminOverview from './components/admin/AdminOverview'
 import AdminProducts from './components/admin/AdminProducts'
 import AdminCategories from './components/admin/AdminCategories'
+import AdminBooks from './components/admin/AdminBooks'
 import AdminOrders from './components/admin/AdminOrders'
 import AdminInvoices from './components/admin/AdminInvoices'
 import AdminCustomers from './components/admin/AdminCustomers'
@@ -214,6 +221,7 @@ export default function App() {
 
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
+  const [books, setBooks] = useState<Book[]>([])
   const [orders, setOrders] = useState<Order[]>([])
   const [ordersLoaded, setOrdersLoaded] = useState(false)
   const knownOrderIdsRef = useRef<Set<string> | null>(null)
@@ -302,12 +310,19 @@ export default function App() {
       (err) => console.warn('Promotions listener error:', err)
     )
 
+    // 5. Books subscription (public – displayed on store front & books library)
+    const unsubBooks = subscribeToBooks(
+      (items) => setBooks(items),
+      (err) => console.warn('Books listener error:', err)
+    )
+
     return () => {
       unsubProducts()
       unsubCategories()
       unsubSettings()
       unsubCoupons()
       unsubPromotions()
+      unsubBooks()
     }
   }, [])
 
@@ -865,6 +880,7 @@ export default function App() {
                   products={products}
                   categories={publicCategories}
                   promotions={promotions}
+                  books={books}
                   onAddToCart={handleAddToCart}
                   settings={settings}
                 />
@@ -901,6 +917,18 @@ export default function App() {
           }
         />
         <Route
+          path="/books"
+          element={
+            <StoreLayout
+              cartData={cart}
+              onCheckout={() => setCheckoutOpen(true)}
+              settings={settings}
+            >
+              <BooksPage books={books} />
+            </StoreLayout>
+          }
+        />
+        <Route
           path="/book"
           element={
             <StoreLayout
@@ -908,7 +936,19 @@ export default function App() {
               onCheckout={() => setCheckoutOpen(true)}
               settings={settings}
             >
-              <BookPage settings={settings} />
+              <BookPage books={books} settings={settings} />
+            </StoreLayout>
+          }
+        />
+        <Route
+          path="/book/:id"
+          element={
+            <StoreLayout
+              cartData={cart}
+              onCheckout={() => setCheckoutOpen(true)}
+              settings={settings}
+            >
+              <BookPage books={books} settings={settings} />
             </StoreLayout>
           }
         />
@@ -973,6 +1013,24 @@ export default function App() {
                   onUpdate={handleUpdateCategory}
                   onDelete={handleDeleteCategory}
                   onMoveAndDelete={handleMoveProductsAndDeleteCategory}
+                  notify={(msg, type) => notify(msg, type ?? 'success')}
+                />
+              </AdminLayout>
+            </AdminGuard>
+          }
+        />
+        <Route
+          path="/admin/books"
+          element={
+            <AdminGuard user={adminUser} ready={authReady}>
+              <AdminLayout user={adminUser!} onLogout={handleAdminLogout} unseenOrdersCount={unseenOrdersCount}>
+                <AdminBooks
+                  books={books}
+                  user={adminUser!}
+                  onAdd={async (book) => { await addBookToFirestore(book) }}
+                  onUpdate={async (book) => { await updateBookInFirestore(book) }}
+                  onDelete={async (id) => { await deleteBookFromFirestore(id) }}
+                  onReorder={async (changed) => { await reorderBooksInFirestore(changed) }}
                   notify={(msg, type) => notify(msg, type ?? 'success')}
                 />
               </AdminLayout>

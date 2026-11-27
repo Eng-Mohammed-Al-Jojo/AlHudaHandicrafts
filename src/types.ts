@@ -11,6 +11,20 @@ export type Category = {
   createdAt?: string
 }
 
+export type Book = {
+  id: string
+  title: string
+  author?: string
+  description: string
+  coverUrl: string
+  pdfUrl: string
+  order: number
+  isPublished: boolean
+  badge?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
 export type ProductImage = {
   url: string
   fileId?: string

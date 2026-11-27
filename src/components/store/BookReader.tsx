@@ -31,7 +31,7 @@ declare global {
 }
 
 export default function BookReader({
-  pdfUrl = '/huda_book.pdf',
+  pdfUrl = '',
   className = '',
   initialPage = 1,
   onClose,

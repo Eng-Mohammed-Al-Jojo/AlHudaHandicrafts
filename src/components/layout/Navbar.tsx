@@ -143,8 +143,8 @@ export default function Navbar({
             <HeaderNavLink to="/#story" active={location.hash === '#story'}>
               قصتنا
             </HeaderNavLink>
-            <HeaderNavLink to="/book" active={location.pathname === '/book'}>
-              كتاب غرز البلاد
+            <HeaderNavLink to="/books" active={location.pathname.startsWith('/book')}>
+              الكتب
             </HeaderNavLink>
           </nav>
 
@@ -254,7 +254,7 @@ export default function Navbar({
             <MobileNavLink to="/categories" onClick={() => setMenuOpen(false)}>الأقسام</MobileNavLink>
             <MobileNavLink to="/products" onClick={() => setMenuOpen(false)}>جميع المنتجات</MobileNavLink>
             <MobileNavLink to="/#story" onClick={() => setMenuOpen(false)}>قصتنا</MobileNavLink>
-            <MobileNavLink to="/book" onClick={() => setMenuOpen(false)}>كتاب غرز البلاد</MobileNavLink>
+            <MobileNavLink to="/books" onClick={() => setMenuOpen(false)}>مكتبة الكتب</MobileNavLink>
             {/* Mobile Currency Switcher */}
             <div className="pt-3 pb-1 border-t border-[#EADBCE]">
               <span className="text-xs text-[#685D52] font-semibold block mb-2">عملة المتجر:</span>

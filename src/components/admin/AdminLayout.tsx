@@ -23,6 +23,7 @@ import {
   Ticket,
   Sparkles,
   BarChart2,
+  BookOpen,
 } from 'lucide-react'
 import type { FirebaseUser } from '../../types'
 import Modal from '../ui/Modal'
@@ -66,6 +67,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'overview',   label: 'نظرة عامة',  icon: LayoutDashboard, to: '/admin' },
   { id: 'products',   label: 'المنتجات',    icon: Package,         to: '/admin/products' },
   { id: 'categories', label: 'الأقسام',     icon: Layers,          to: '/admin/categories' },
+  { id: 'books',      label: 'الكتب',       icon: BookOpen,        to: '/admin/books' },
   { id: 'orders',     label: 'الطلبات',     icon: ShoppingBag,     to: '/admin/orders' },
   { id: 'invoices',   label: 'الفواتير',    icon: ReceiptText,     to: '/admin/invoices' },
   { id: 'customers',  label: 'الزبائن',     icon: Users,           to: '/admin/customers' },

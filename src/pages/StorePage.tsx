@@ -7,17 +7,18 @@ import ProductGrid from '../components/store/ProductGrid'
 import StorySection from '../components/store/StorySection'
 import BookSection from '../components/store/BookSection'
 import Newsletter from '../components/store/Newsletter'
-import type { Product, Category, SiteSettings, Promotion } from '../types'
+import type { Product, Category, SiteSettings, Promotion, Book } from '../types'
 
 interface Props {
   products: Product[]
   categories: Category[]
   promotions?: Promotion[]
+  books?: Book[]
   onAddToCart: (p: Product) => void
   settings: SiteSettings
 }
 
-export default function StorePage({ products, categories, promotions = [], onAddToCart, settings }: Props) {
+export default function StorePage({ products, categories, promotions = [], books = [], onAddToCart, settings }: Props) {
   const [params] = useSearchParams()
   const query = params.get('q') ?? ''
 
@@ -37,7 +38,7 @@ export default function StorePage({ products, categories, promotions = [], onAdd
         featured={true}
       />
       <StorySection />
-      <BookSection />
+      <BookSection books={books} />
       <Newsletter />
     </div>
   )

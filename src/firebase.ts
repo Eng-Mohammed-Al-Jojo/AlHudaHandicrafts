@@ -24,7 +24,7 @@ import {
   serverTimestamp,
   writeBatch
 } from 'firebase/firestore'
-import type { Product, Category, Order, OrderStatus, PaymentStatus, SiteSettings, NewsletterSubscriber, PaymentMethod, PaymentMethodDetails, PaymentMethodId, Invoice, InvoiceDraft } from './types'
+import type { Product, Category, Book, Order, OrderStatus, PaymentStatus, SiteSettings, NewsletterSubscriber, PaymentMethod, PaymentMethodDetails, PaymentMethodId, Invoice, InvoiceDraft } from './types'
 import { DEFAULT_SITE_SETTINGS } from './types'
 import { getFreeShippingThreshold } from './utils/commerce'
 import { normalizeWhatsAppNumber } from './utils/whatsapp'
@@ -103,8 +103,7 @@ export function observeAdminAuth(onChange: (user: FirebaseUser | null) => void) 
 
 type ImageKitAuthorization = { signature: string; token: string; expire: number | string; publicKey: string }
 
-/** ImageKit has a free tier; the signing secret stays safely inside the Worker. */
-export async function uploadProductImage(file: File, idToken: string): Promise<string> {
+async function uploadToImageKit(file: File, idToken: string, folder: string): Promise<string> {
   const authorizationResponse = await fetch('https://imagekit-upload-auth.work-menu-mohammed1998.workers.dev/upload-auth', {
     method: 'POST', headers: { Authorization: `Bearer ${idToken}` },
   })
@@ -121,38 +120,32 @@ export async function uploadProductImage(file: File, idToken: string): Promise<s
   formData.append('signature', authorization.signature)
   formData.append('expire', String(authorization.expire))
   formData.append('token', authorization.token)
-  formData.append('folder', '/al-huda/products')
+  formData.append('folder', folder)
   const uploadResponse = await fetch('https://upload.imagekit.io/api/v1/files/upload', { method: 'POST', body: formData })
-  if (!uploadResponse.ok) throw new Error(`ImageKit رفض رفع الصورة (رمز ${uploadResponse.status})`)
+  if (!uploadResponse.ok) throw new Error(`ImageKit رفض رفع الملف (رمز ${uploadResponse.status})`)
   const result = await uploadResponse.json() as { url?: string }
-  if (!result.url) throw new Error('لم تُرجع ImageKit رابط الصورة')
+  if (!result.url) throw new Error('لم تُرجع ImageKit رابط الملف')
   return result.url
+}
+
+/** ImageKit has a free tier; the signing secret stays safely inside the Worker. */
+export async function uploadProductImage(file: File, idToken: string): Promise<string> {
+  return uploadToImageKit(file, idToken, '/al-huda/products')
 }
 
 /** Upload category image to ImageKit */
 export async function uploadCategoryImage(file: File, idToken: string): Promise<string> {
-  const authorizationResponse = await fetch('https://imagekit-upload-auth.work-menu-mohammed1998.workers.dev/upload-auth', {
-    method: 'POST', headers: { Authorization: `Bearer ${idToken}` },
-  })
-  if (!authorizationResponse.ok) {
-    const detail = await authorizationResponse.json().catch(() => ({})) as { error?: string }
-    throw new Error(`${detail.error || 'خدمة تصريح الرفع غير متاحة'} (رمز ${authorizationResponse.status})`)
-  }
-  const authorization = await authorizationResponse.json() as ImageKitAuthorization
-  if (!authorization.signature || !authorization.token || !authorization.expire || !authorization.publicKey) throw new Error('تصريح ImageKit غير مكتمل')
-  const formData = new FormData()
-  formData.append('file', file)
-  formData.append('fileName', `${Date.now()}-${file.name.replace(/\s+/g, '_')}`)
-  formData.append('publicKey', authorization.publicKey)
-  formData.append('signature', authorization.signature)
-  formData.append('expire', String(authorization.expire))
-  formData.append('token', authorization.token)
-  formData.append('folder', '/al-huda/categories')
-  const uploadResponse = await fetch('https://upload.imagekit.io/api/v1/files/upload', { method: 'POST', body: formData })
-  if (!uploadResponse.ok) throw new Error(`ImageKit رفض رفع الصورة (رمز ${uploadResponse.status})`)
-  const result = await uploadResponse.json() as { url?: string }
-  if (!result.url) throw new Error('لم تُرجع ImageKit رابط الصورة')
-  return result.url
+  return uploadToImageKit(file, idToken, '/al-huda/categories')
+}
+
+/** Upload book cover image to ImageKit */
+export async function uploadBookCover(file: File, idToken: string): Promise<string> {
+  return uploadToImageKit(file, idToken, '/al-huda/books/covers')
+}
+
+/** Upload book PDF file to ImageKit */
+export async function uploadBookPdf(file: File, idToken: string): Promise<string> {
+  return uploadToImageKit(file, idToken, '/al-huda/books/files')
 }
 
 
@@ -167,6 +160,7 @@ const SUBSCRIBERS_COLLECTION = 'subscribers'
 const INVOICES_COLLECTION = 'invoices'
 const COUPONS_COLLECTION = 'coupons'
 const PROMOTIONS_COLLECTION = 'promotions'
+const BOOKS_COLLECTION = 'books'
 function normalizePaymentDetails(value: unknown, fallback: PaymentMethodDetails): PaymentMethodDetails {
   const saved = value && typeof value === 'object' ? value as Record<string, unknown> : {}
   return {
@@ -776,6 +770,85 @@ export async function updatePromotionInFirestore(id: string, patch: Partial<any>
 
 export async function deletePromotionFromFirestore(id: string): Promise<void> {
   await deleteDoc(doc(db, PROMOTIONS_COLLECTION, id))
+}
+
+// ─── FIRESTORE: Books ─────────────────────────────────────────────────────────
+
+export function subscribeToBooks(
+  onData: (books: Book[]) => void,
+  onError?: (err: Error) => void
+): () => void {
+  return onSnapshot(
+    collection(db, BOOKS_COLLECTION),
+    snapshot => {
+      const items: Book[] = snapshot.docs.map(docSnap => {
+        const data = docSnap.data()
+        const createdAt =
+          typeof data.createdAt?.toDate === 'function'
+            ? data.createdAt.toDate().toISOString()
+            : typeof data.createdAt === 'string'
+              ? data.createdAt
+              : undefined
+        const updatedAt =
+          typeof data.updatedAt?.toDate === 'function'
+            ? data.updatedAt.toDate().toISOString()
+            : typeof data.updatedAt === 'string'
+              ? data.updatedAt
+              : undefined
+        return {
+          id: docSnap.id,
+          title: String(data.title ?? ''),
+          author: data.author ? String(data.author) : undefined,
+          description: String(data.description ?? ''),
+          coverUrl: String(data.coverUrl ?? ''),
+          pdfUrl: String(data.pdfUrl ?? ''),
+          order: typeof data.order === 'number' ? data.order : 1,
+          isPublished: data.isPublished !== false,
+          badge: data.badge ? String(data.badge) : undefined,
+          createdAt,
+          updatedAt,
+        }
+      })
+      items.sort((a, b) => (a.order - b.order) || ((b.createdAt ?? '').localeCompare(a.createdAt ?? '')))
+      onData(items)
+    },
+    err => {
+      console.error('Firestore books listener error:', err)
+      onError?.(err)
+    }
+  )
+}
+
+export async function addBookToFirestore(book: Omit<Book, 'id'>): Promise<string> {
+  const docRef = await addDoc(collection(db, BOOKS_COLLECTION), {
+    ...withoutUndefinedFields(book),
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  })
+  return docRef.id
+}
+
+export async function updateBookInFirestore(book: Book): Promise<void> {
+  const { id, createdAt: _createdAt, updatedAt: _updatedAt, ...rest } = book
+  await updateDoc(doc(db, BOOKS_COLLECTION, id), {
+    ...withoutUndefinedFields(rest),
+    updatedAt: serverTimestamp(),
+  })
+}
+
+export async function deleteBookFromFirestore(id: string): Promise<void> {
+  await deleteDoc(doc(db, BOOKS_COLLECTION, id))
+}
+
+export async function reorderBooksInFirestore(books: Book[]): Promise<void> {
+  const batch = writeBatch(db)
+  for (const book of books) {
+    batch.update(doc(db, BOOKS_COLLECTION, book.id), {
+      order: book.order,
+      updatedAt: serverTimestamp(),
+    })
+  }
+  await batch.commit()
 }
 
 // ─── INITIAL SEEDING & SYNC HELPER ─────────────────────────────────────────────
